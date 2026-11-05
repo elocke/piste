@@ -1,0 +1,4 @@
+# A root that extends the zone may not set the zone's policy.
+[policy]
+extends  = true
+unlisted = "warn"

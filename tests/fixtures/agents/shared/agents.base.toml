@@ -1,0 +1,21 @@
+[[skill]]
+name = "thirdp"
+source = "github:example/thirdp"
+path = "skills/thirdp"
+ref = "0000000000000000000000000000000000000000"
+
+[[claude.plugin]]
+id = "tool@market"
+
+[[claude.plugin]]
+id = "heavy@market"
+
+# Catalog marketplaces no shared plugin uses: a zone opts in with a plugin
+# (workuse), so a deny zone that doesn't neither checks nor installs them.
+[[claude.marketplace]]
+name = "catalog"
+source = "github:example/catalog"
+
+[[codex.marketplace]]
+name = "codexcat"
+source = "github:example/codexcat"

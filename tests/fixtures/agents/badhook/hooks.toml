@@ -1,0 +1,5 @@
+[[hook]]
+name = "bad"
+event = "preToolUze"
+matcher = "Bash"
+script = "missing.sh"

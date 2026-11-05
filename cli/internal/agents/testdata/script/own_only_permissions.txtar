@@ -1,0 +1,46 @@
+# own_only_permissions: the 17 foreign allows are kept; only
+# our entries are added and removed.
+
+mkdir proj/.git
+cd proj
+cp .claude/settings.json settings.orig
+
+exec piste agents add shared:permission/git-status shared:permission/no-rm-rf $RS
+grep '"Bash\(tool17:\*\)",$' .claude/settings.json
+grep '"Bash\(git status\)"' .claude/settings.json
+grep '"Bash\(rm -rf:\*\)"' .claude/settings.json
+grep 'private/\*\*' .claude/settings.json
+exists .codex/rules/piste.rules
+
+exec piste agents remove shared:permission/git-status shared:permission/no-rm-rf $RS
+cmp .claude/settings.json settings.orig
+! exists .codex/rules/piste.rules
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/.claude/settings.json --
+{
+  "permissions": {
+    "allow": [
+      "Bash(tool1:*)",
+      "Bash(tool2:*)",
+      "Bash(tool3:*)",
+      "Bash(tool4:*)",
+      "Bash(tool5:*)",
+      "Bash(tool6:*)",
+      "Bash(tool7:*)",
+      "Bash(tool8:*)",
+      "Bash(tool9:*)",
+      "Bash(tool10:*)",
+      "Bash(tool11:*)",
+      "Bash(tool12:*)",
+      "Bash(tool13:*)",
+      "Bash(tool14:*)",
+      "Bash(tool15:*)",
+      "Bash(tool16:*)",
+      "Bash(tool17:*)"
+    ],
+    "deny": ["Read(./private/**)"]
+  }
+}

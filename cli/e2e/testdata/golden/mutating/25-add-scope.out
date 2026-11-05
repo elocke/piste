@@ -1,0 +1,2 @@
+Target flake: $WORK/h/piste/overlays/work
+Declare one in a bucket module (e.g. modules/js-globals.nix) first.

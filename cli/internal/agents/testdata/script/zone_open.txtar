@@ -1,0 +1,39 @@
+# zone_open: a zone is any lowercase name. An `agent` zone
+# builds its registry and syncs a project like personal / work do, and the
+# same isolation rules hold: shared is never a machine zone, roots from two
+# zones need --zone, and another zone's root is refused.
+
+exec piste agents registry build --out reg $RS $RA --zone agent
+stdout 'wrote reg \(zone agent\)'
+exists reg/registry.json
+grep '"zone": "agent"' reg/registry.json
+exec piste agents --registry reg list --kind skill
+stdout '^agent:skill/beta2'
+
+! exec piste agents registry build --out reg2 $RS $RA $RW
+stderr 'roots from zones agent, work: pass --zone'
+! exists reg2
+
+! exec piste agents registry build --out reg3 $RS $RA --zone shared
+stderr 'not "shared"'
+! exists reg3
+
+! exec piste agents registry build --out reg4 $RS $RP --zone agent
+stderr 'personal content'
+! exists reg4
+
+# A zone = "agent" project takes agent:* items; the zone comes from the roots.
+mkdir proj/.git
+cd proj
+exec piste agents sync $RS $RA
+stdout 'beta2'
+exists .agents/skills/beta2/SKILL.md
+! exec piste agents add personal:skill/beta $RS $RP
+stderr 'is personal content; this project is zone = "agent" \(refused\)'
+
+-- proj/.agents/agents.toml --
+zone = "agent"
+harnesses = ["claude", "codex"]
+
+[[use]]
+id = "agent:skill/beta2"

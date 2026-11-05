@@ -1,0 +1,4 @@
+Usage: piste mcp sync [OPTIONS]
+Try 'piste mcp sync --help' for help.
+
+Error: --apply only applies to --prune

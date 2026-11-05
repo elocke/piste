@@ -1,0 +1,23 @@
+# remove_refuses_edited: a hand-edited owned file → refuse +
+# diff, nothing removed; --force removes it.
+
+mkdir proj/.git
+cd proj
+exec piste agents add shared:agent/rev $RS
+replace 'Be terse.' 'Be verbose.' .claude/agents/rev.md
+cp .agents/agents.toml manifest.before
+
+! exec piste agents remove shared:agent/rev $RS
+stderr 'edited since piste wrote it'
+stderr '^piste agents: -Be terse\.'
+stderr '^piste agents: \+Be verbose\.'
+exists .claude/agents/rev.md
+exists .codex/agents/rev.toml
+cmp .agents/agents.toml manifest.before
+
+exec piste agents remove --force shared:agent/rev $RS
+! exists .claude/agents/rev.md
+! exists .codex/agents/rev.toml
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

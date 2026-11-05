@@ -1,0 +1,68 @@
+[
+  {
+    "state": "ok",
+    "kind": "skills",
+    "target": ".claude/skills/ok",
+    "detail": "src/skills/ok"
+  },
+  {
+    "state": "broken",
+    "kind": "skills",
+    "target": ".claude/skills/broken",
+    "detail": "src/skills/gone"
+  },
+  {
+    "state": "invalid",
+    "kind": "skills",
+    "target": ".claude/skills/bad",
+    "detail": "name 'wrong-name' != link 'bad'; frontmatter missing 'description'"
+  },
+  {
+    "state": "foreign",
+    "kind": "skills",
+    "target": ".claude/skills/copy",
+    "detail": "src/skills/ok"
+  },
+  {
+    "state": "missing",
+    "kind": "skills",
+    "target": ".claude/skills/missing",
+    "detail": "src/skills/ok"
+  },
+  {
+    "state": "ok",
+    "kind": "skills",
+    "target": ".agents/skills/ok",
+    "detail": "src/skills/ok"
+  },
+  {
+    "state": "stale",
+    "kind": "instructions",
+    "target": ".claude/CLAUDE.md",
+    "detail": "shared/instructions/never.md"
+  },
+  {
+    "state": "stale",
+    "kind": "instructions",
+    "target": ".codex/AGENTS.md",
+    "detail": "shared/instructions/never.md, x.md"
+  },
+  {
+    "state": "deferred",
+    "kind": "skills",
+    "target": "paseo",
+    "detail": "third-party; not locked yet (piste agents update)"
+  },
+  {
+    "state": "unmanaged",
+    "kind": "skills",
+    "target": ".agents/skills/unmanaged-one",
+    "detail": "not declared by any preset"
+  },
+  {
+    "state": "unmanaged",
+    "kind": "skills",
+    "target": ".claude/skills/hand",
+    "detail": "not declared by any preset"
+  }
+]

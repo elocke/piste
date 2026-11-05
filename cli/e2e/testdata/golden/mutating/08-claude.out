@@ -1,0 +1,1 @@
+claude --add-dir $WORK/h/piste/overlays/personal --add-dir $WORK/h/piste/overlays/work --permission-mode auto -p hi MD=1 cwd=$WORK/h/piste

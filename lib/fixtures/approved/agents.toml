@@ -1,0 +1,2 @@
+# A zone source that declares nothing third-party: evaluates under any
+# policy (the positive control of zoneChecks' zone-unapproved-rejected).

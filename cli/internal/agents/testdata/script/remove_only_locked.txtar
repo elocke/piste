@@ -1,0 +1,145 @@
+# remove_only_locked: with 25 hand skills + 2 ours, remove
+# leaves exactly 25. Unowned items are reported as unknown, never deleted.
+
+mkdir proj/.git
+cd proj
+exec piste agents add shared:skill/alpha shared:skill/gamma $RS
+countdir 27 .claude/skills
+
+exec piste agents drift $RS
+stdout '^unknown +\.claude/skills/hand00'
+
+exec piste agents remove shared:skill/alpha shared:skill/gamma $RS
+countdir 25 .claude/skills
+! exists .agents/skills/alpha
+! exists .agents/skills/gamma
+exists .claude/skills/hand24/SKILL.md
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/.claude/skills/hand00/SKILL.md --
+---
+name: hand00
+description: hand-made 0
+---
+-- proj/.claude/skills/hand01/SKILL.md --
+---
+name: hand01
+description: hand-made 1
+---
+-- proj/.claude/skills/hand02/SKILL.md --
+---
+name: hand02
+description: hand-made 2
+---
+-- proj/.claude/skills/hand03/SKILL.md --
+---
+name: hand03
+description: hand-made 3
+---
+-- proj/.claude/skills/hand04/SKILL.md --
+---
+name: hand04
+description: hand-made 4
+---
+-- proj/.claude/skills/hand05/SKILL.md --
+---
+name: hand05
+description: hand-made 5
+---
+-- proj/.claude/skills/hand06/SKILL.md --
+---
+name: hand06
+description: hand-made 6
+---
+-- proj/.claude/skills/hand07/SKILL.md --
+---
+name: hand07
+description: hand-made 7
+---
+-- proj/.claude/skills/hand08/SKILL.md --
+---
+name: hand08
+description: hand-made 8
+---
+-- proj/.claude/skills/hand09/SKILL.md --
+---
+name: hand09
+description: hand-made 9
+---
+-- proj/.claude/skills/hand10/SKILL.md --
+---
+name: hand10
+description: hand-made 10
+---
+-- proj/.claude/skills/hand11/SKILL.md --
+---
+name: hand11
+description: hand-made 11
+---
+-- proj/.claude/skills/hand12/SKILL.md --
+---
+name: hand12
+description: hand-made 12
+---
+-- proj/.claude/skills/hand13/SKILL.md --
+---
+name: hand13
+description: hand-made 13
+---
+-- proj/.claude/skills/hand14/SKILL.md --
+---
+name: hand14
+description: hand-made 14
+---
+-- proj/.claude/skills/hand15/SKILL.md --
+---
+name: hand15
+description: hand-made 15
+---
+-- proj/.claude/skills/hand16/SKILL.md --
+---
+name: hand16
+description: hand-made 16
+---
+-- proj/.claude/skills/hand17/SKILL.md --
+---
+name: hand17
+description: hand-made 17
+---
+-- proj/.claude/skills/hand18/SKILL.md --
+---
+name: hand18
+description: hand-made 18
+---
+-- proj/.claude/skills/hand19/SKILL.md --
+---
+name: hand19
+description: hand-made 19
+---
+-- proj/.claude/skills/hand20/SKILL.md --
+---
+name: hand20
+description: hand-made 20
+---
+-- proj/.claude/skills/hand21/SKILL.md --
+---
+name: hand21
+description: hand-made 21
+---
+-- proj/.claude/skills/hand22/SKILL.md --
+---
+name: hand22
+description: hand-made 22
+---
+-- proj/.claude/skills/hand23/SKILL.md --
+---
+name: hand23
+description: hand-made 23
+---
+-- proj/.claude/skills/hand24/SKILL.md --
+---
+name: hand24
+description: hand-made 24
+---

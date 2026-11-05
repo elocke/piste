@@ -1,0 +1,369 @@
+# piste update: the checkout moves to the newest release and every
+# overlay's engine pin moves with it, with the notes in between; a checkout
+# on a branch pulls instead. git is real (a file:// remote), nix is shimmed.
+env USER=jane
+exec sh mkremote.sh
+cd $WORK/home/piste
+
+# No checkout anywhere: checkoutRoot's error.
+cd $WORK
+env HOME=$WORK/nohome
+! exec piste update
+stderr 'no piste checkout'
+env HOME=$WORK/home
+cd $WORK/home/piste
+
+# origin is unreachable: stopped with git's reason, nothing touched.
+exec git remote set-url origin file://$WORK/nope.git
+! exec piste update
+stderr 'does not appear to be a git repository'
+! stdout 'piste: v0.1.0'
+cmp overlays/mine/flake.nix $WORK/mine.orig
+cmp overlays/gh/flake.nix $WORK/gh.orig
+! exists $WORK/calls
+exec git remote set-url origin file://$WORK/remote/piste.git
+
+# A local edit in the way of the move: stopped before any overlay.
+cp $WORK/note.txt CHANGELOG.md
+! exec piste update
+stderr 'would be overwritten'
+stderr 'stash'
+exec git tag --points-at HEAD
+stdout '^v0.1.0$'
+cmp overlays/mine/flake.nix $WORK/mine.orig
+! exists $WORK/calls
+exec git checkout CHANGELOG.md
+
+# An untracked file the newer release adds is in the way: git names it, and
+# the fix moves it (plain git stash leaves untracked files where they are).
+cp $WORK/note.txt VERSION
+! exec piste update
+stderr 'untracked working tree files would be overwritten'
+stderr 'Move or remove VERSION in \S+/home/piste \(or git -C \S+/home/piste stash -u\), then run piste update again.'
+exec git tag --points-at HEAD
+stdout '^v0.1.0$'
+cmp overlays/mine/flake.nix $WORK/mine.orig
+! exists $WORK/calls
+rm VERSION
+
+# --dry-run: the notes and the moves, nothing changed.
+exec piste update --dry-run
+stdout 'You.re on v0.1.0. Newest: v0.2.0.'
+stdout '^v0.2.0 \(2026-02-01\)$'
+stdout '^  Upgrading:$'
+stdout 'Would move piste: v0.1.0 → v0.2.0'
+stdout 'Would move overlays/mine: engine v0.1.0 → v0.2.0'
+stdout 'Would update overlays/mine.s inputs'
+exec git tag --points-at HEAD
+stdout '^v0.1.0$'
+cmp overlays/mine/flake.nix $WORK/mine.orig
+cmp overlays/gh/flake.nix $WORK/gh.orig
+! exists $WORK/calls
+
+# Every overlay's nix flake update fails: each is reported and left as it
+# was (its pin not moved ahead of its lock); the others still run. No "Next:
+# piste switch": the overlays come first.
+env SHIM_EXIT_NIX_FLAKE=1
+! exec piste update
+stderr 'overlays/gh: nix flake update failed'
+stderr 'overlays/mine: nix flake update failed'
+stderr 'overlays/rev: nix flake update failed'
+stderr 'Fix the overlays above, then run piste update again.'
+! stdout 'Next:'
+cmp overlays/mine/flake.nix $WORK/mine.orig
+cmp overlays/gh/flake.nix $WORK/gh.orig
+env SHIM_EXIT_NIX_FLAKE=
+
+# Run again: the checkout is on v0.2.0 now, but the pins are on v0.1.0, so
+# the notes they move across still show.
+exec piste update
+stdout 'You.re on v0.2.0, the newest release.'
+stdout 'overlays/gh.s engine is on v0.1.0.'
+stdout '^  Upgrading:$'
+stdout '^  - Rename piste.foo to piste.bar in your hosts.$'
+stdout 'overlays/mine: engine v0.1.0 → v0.2.0'
+stdout 'Next: read the Upgrading notes above, then piste switch.'
+cp $WORK/mine.orig overlays/mine/flake.nix
+cp $WORK/gh.orig overlays/gh/flake.nix
+exec git -c advice.detachedHead=false checkout -q v0.1.0
+rm $WORK/calls
+
+# The move: v0.2.0, not the pre-release; its notes, Upgrading set apart;
+# both release pin forms moved, a rev pin named and left.
+exec piste update
+stdout 'You.re on v0.1.0. Newest: v0.2.0.'
+stdout '^v0.2.0 \(2026-02-01\)$'
+stdout '^  - Second.$'
+stdout '^  Upgrading:$'
+stdout '^  - Rename piste.foo to piste.bar in your hosts.$'
+! stdout 'Third'
+! stdout 'v0.3.0'
+! stdout 'First'
+! stderr 'detached HEAD'
+stdout 'piste: v0.1.0 → v0.2.0'
+stdout 'overlays/mine: engine v0.1.0 → v0.2.0'
+stdout 'overlays/gh: engine v0.1.0 → v0.2.0'
+stdout 'overlays/rev: engine pin git\+file://\S+\?rev=[0-9a-f]+ isn.t a release: left as it is'
+stdout 'Next: read the Upgrading notes above, then piste switch.'
+stdout 'Commit overlays/mine.s flake.nix and flake.lock once it works.'
+! stdout 'Commit overlays/rev'
+exec git tag --points-at HEAD
+stdout '^v0.2.0$'
+grep 'url = "git\+file://\S+/remote/piste.git\?ref=refs/tags/v0.2.0";' overlays/mine/flake.nix
+grep 'inputs.piste.url = "github:example/piste/v0.2.0";' overlays/gh/flake.nix
+cmp overlays/rev/flake.nix $WORK/rev.orig
+grep '^nix flake update --flake \S+/overlays/gh$' $WORK/calls
+grep '^nix flake update --flake \S+/overlays/mine$' $WORK/calls
+grep '^nix flake update --flake \S+/overlays/rev$' $WORK/calls
+
+# Again: on the newest (its rc1 tag on the same commit is no matter); the
+# inputs are still updated.
+rm $WORK/calls
+exec piste update
+stdout 'You.re on v0.2.0, the newest release.'
+stdout 'overlays/mine: engine already v0.2.0'
+! stdout 'Upgrading'
+stdout 'Next: piste switch.'
+grep '^nix flake update --flake \S+/overlays/mine$' $WORK/calls
+
+# An engine input declared as a block piste update can't read (attributes,
+# not a url): an error and exit 1, the overlay left as it was; the others
+# still move.
+mkdir overlays/odd
+cp $WORK/odd.nix overlays/odd/flake.nix
+rm $WORK/calls
+! exec piste update
+stderr 'overlays/odd: couldn.t read its engine pin: give its piste input a url = "…" \(piste update moves that\), or move it to v0.2.0 by hand'
+! stdout 'overlays/odd: no piste input'
+stdout 'overlays/mine: engine already v0.2.0'
+stderr 'Fix the overlays above, then run piste update again.'
+cmp overlays/odd/flake.nix $WORK/odd.nix
+! grep 'overlays/odd$' $WORK/calls
+grep '^nix flake update --flake \S+/overlays/rev$' $WORK/calls
+rm overlays/odd
+
+# Detached on a commit that isn't a release: stopped, with the way back.
+exec git -c advice.detachedHead=false checkout -q v0.3.0-rc1
+! exec piste update
+stderr 'neither a release nor a branch'
+stderr 'git -C \S+/home/piste checkout v0.2.0'
+exec git -c advice.detachedHead=false checkout -q v0.2.0
+
+# One input: the engine's move with releases; the overlay's own are updated.
+cd overlays/mine
+! exec piste update nixpkgs
+stderr 'nixpkgs comes from the engine: it moves with piste releases \(piste update\)'
+! exec piste update claude-code
+stderr 'claude-code comes from the engine'
+rm $WORK/calls
+exec piste update home-manager
+grep '^nix flake update home-manager --flake \S+/overlays/mine$' $WORK/calls
+! exec piste update --dry-run nixpkgs
+stderr 'dry-run'
+cd $WORK
+
+# On main (whose tip is a release commit): it pulls, no notes, still on
+# main; the pin still moves to the newest release.
+exec git clone -q remote/piste.git home/main
+exec git -C home/main reset -q --hard v0.2.0
+exec git clone -q remote/mine.git home/main/overlays/mine
+cd home/main
+exec piste update
+stdout 'You.re on main. Newest release: v0.2.0.'
+! stdout 'Upgrading'
+! stdout 'Second'
+stdout 'piste: main [0-9a-f]+ → [0-9a-f]+'
+stdout 'overlays/mine: engine v0.1.0 → v0.2.0'
+exec git symbolic-ref --short HEAD
+stdout '^main$'
+grep 3 VERSION
+grep 'ref=refs/tags/v0.2.0' overlays/mine/flake.nix
+
+# The release notice after a successful piste switch, with CI cleared (the
+# harness sets CI=1 so that no other script reaches a remote). A checkout on
+# v0.1.0; cache.sh writes the check's cache where Linux and a Mac keep it.
+env CI=
+exec git -C $WORK/home/piste -c advice.detachedHead=false checkout -q v0.1.0
+cd $WORK/home/piste/overlays/mine
+
+# A day-old check: checked again, and the line ends the switch.
+exec sh $WORK/cache.sh 0 v0.1.0
+exec piste switch
+stdout 'Switch complete!\npiste v0.2.0 is out \(you.re on v0.1.0\): piste update shows what changed$'
+[linux] grep '"newest":"v0.2.0"' $HOME/.cache/piste/release.json
+[darwin] grep '"newest":"v0.2.0"' $HOME/Library/Caches/piste/release.json
+
+# A fresh check that found your release: no line, no new check.
+exec sh $WORK/cache.sh now v0.1.0
+exec piste switch
+stdout 'Switch complete!'
+! stdout 'is out'
+[linux] cmp $HOME/.cache/piste/release.json $WORK/cache.before
+[darwin] cmp $HOME/Library/Caches/piste/release.json $WORK/cache.before
+
+# Under CI: no check at all.
+exec sh $WORK/cache.sh 0 v0.1.0
+env CI=1
+exec piste switch
+! stdout 'is out'
+[linux] cmp $HOME/.cache/piste/release.json $WORK/cache.before
+[darwin] cmp $HOME/Library/Caches/piste/release.json $WORK/cache.before
+env CI=
+
+# origin unreachable: silence, and the check is recorded (one wait a day).
+exec git -C $WORK/home/piste remote set-url origin file://$WORK/nope.git
+exec sh $WORK/cache.sh 0 v0.1.0
+exec piste switch
+stdout 'Switch complete!'
+! stdout 'is out'
+! stderr .
+[linux] ! grep '"checked":0,' $HOME/.cache/piste/release.json
+[darwin] ! grep '"checked":0,' $HOME/Library/Caches/piste/release.json
+exec git -C $WORK/home/piste remote set-url origin file://$WORK/remote/piste.git
+
+# On main (past the releases), yours is the overlay's pin.
+cd $WORK/home/main/overlays/mine
+exec git checkout flake.nix
+exec sh $WORK/cache.sh 0 v0.1.0
+exec piste switch
+stdout 'piste v0.2.0 is out \(you.re on v0.1.0\): piste update shows what changed$'
+
+# On main right after a release (its tip is the release commit): still the
+# pin, not the tag on main's tip.
+exec git -C $WORK/home/main reset -q --hard v0.2.0
+exec sh $WORK/cache.sh 0 v0.1.0
+exec piste switch
+stdout 'piste v0.2.0 is out \(you.re on v0.1.0\): piste update shows what changed$'
+
+# Inside a systemd user service (Linux), the switch runs as its own unit:
+# the outer piste prints the line, once; the unit's piste runs in
+# piste-switch-* and prints none.
+[!linux] stop 'detaching is Linux only'
+mkdir $WORK/.machine
+cp $WORK/cgroup.runner $WORK/.machine/cgroup
+chmod 0755 $WORK/detach/systemd-run
+exec sh $WORK/cache.sh 0 v0.1.0
+env PATH=$WORK/detach:$PATH
+exec piste switch
+stdout '^Running it as piste-switch-\d+\.service\.'
+stdout 'Switch complete!\npiste v0.2.0 is out \(you.re on v0.1.0\): piste update shows what changed$'
+! stdout '(?s)is out.*is out'
+grep 'Switch complete!' $HOME/.local/state/piste/switch.log
+! grep 'is out' $HOME/.local/state/piste/switch.log
+
+-- cgroup.runner --
+0::/user.slice/user-1000.slice/user@1000.service/app.slice/runner.service
+-- detach/systemd-run --
+#!/bin/sh
+# systemd-run --user --wait ... -- <argv>: argv runs as the unit would, in
+# piste-switch-1.service, its output in the StandardOutput=truncate: log;
+# then the caller is back in its own cgroup.
+[ "$1" = --version ] && { echo "systemd 255 (255.4-1)"; exit 0; }
+log=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --) shift; break ;;
+    -p) case $2 in StandardOutput=truncate:*) log=${2#StandardOutput=truncate:} ;; esac; shift 2 ;;
+    -E|--unit) shift 2 ;;
+    *) shift ;;
+  esac
+done
+cg=$(cat "$WORK/.machine/cgroup")
+echo "0::/user.slice/user-1000.slice/user@1000.service/app.slice/piste-switch-1.service" > "$WORK/.machine/cgroup"
+"$@" > "$log" 2>&1
+rc=$?
+echo "$cg" > "$WORK/.machine/cgroup"
+exit $rc
+-- cache.sh --
+# cache.sh <checked: unix time, or now> <newest>: the release check's cache,
+# where os.UserCacheDir puts it on Linux and on a Mac; a copy in cache.before.
+t=$1
+[ "$t" = now ] && t=$(date +%s)
+for d in "$HOME/.cache/piste" "$HOME/Library/Caches/piste"; do
+  mkdir -p "$d"
+  printf '{"checked":%s,"newest":"%s"}' "$t" "$2" > "$d/release.json"
+done
+cp "$HOME/.cache/piste/release.json" "$WORK/cache.before"
+-- odd.nix --
+{
+  inputs.piste = { type = "github"; owner = "example"; repo = "piste"; ref = "v0.1.0"; };
+  outputs = _: { };
+}
+-- note.txt --
+mine
+-- cl1.md --
+# Changelog
+
+## Unreleased
+
+## v0.1.0 (2026-01-01)
+- First.
+-- cl2.md --
+# Changelog
+
+## Unreleased
+
+## v0.2.0 (2026-02-01)
+- Second.
+### Upgrading
+- Rename piste.foo to piste.bar in your hosts.
+
+## v0.1.0 (2026-01-01)
+- First.
+-- cl3.md --
+# Changelog
+
+## Unreleased
+- Third.
+
+## v0.2.0 (2026-02-01)
+- Second.
+### Upgrading
+- Rename piste.foo to piste.bar in your hosts.
+
+## v0.1.0 (2026-01-01)
+- First.
+-- mkremote.sh --
+set -e
+mkdir -p src
+cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+c() { git add -A && git -c user.name=t -c user.email=t@example.com commit -q -m "$1" && git tag "$1"; }
+git init -q -b main
+cp ../cl1.md CHANGELOG.md && c v0.1.0
+cp ../cl2.md CHANGELOG.md && echo 2 > VERSION && c v0.2.0 && git tag v0.2.0-rc1
+cp ../cl3.md CHANGELOG.md && echo 3 > VERSION && c v0.3.0-rc1
+rev=$(git rev-parse v0.1.0)
+cd .. && mkdir -p remote && git clone -q --bare src remote/piste.git
+engine="git+file://$WORK/remote/piste.git"
+repo() { # name flake-body
+  mkdir "src-$1" && cd "src-$1"
+  printf '%s\n' "$2" > flake.nix
+  git init -q -b main && git add -A && git -c user.name=t -c user.email=t@example.com commit -q -m init
+  cd .. && git clone -q --bare "src-$1" "remote/$1.git"
+}
+repo mine "{
+  inputs = {
+    piste = {
+      url = \"$engine?ref=refs/tags/v0.1.0\";
+    };
+    nixpkgs.follows = \"piste/nixpkgs\";
+    home-manager.url = \"github:nix-community/home-manager\";
+  };
+  outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = \"jane\"; zone = \"personal\"; hosts = { }; };
+}"
+repo gh '{
+  inputs.piste.url = "github:example/piste/v0.1.0";
+  outputs = _: { };
+}'
+repo rev "{
+  inputs.piste.url = \"$engine?rev=$rev\";
+  outputs = _: { };
+}"
+git -c advice.detachedHead=false clone -q --branch v0.1.0 remote/piste.git home/piste
+for o in mine gh rev; do
+  git clone -q "remote/$o.git" "home/piste/overlays/$o"
+  cp "home/piste/overlays/$o/flake.nix" "$o.orig"
+done

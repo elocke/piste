@@ -1,0 +1,8 @@
+# A work zone declaring a marketplace its own policy does not allow.
+[policy]
+allow    = ["claude:market"]
+unlisted = "deny"
+
+[[claude.marketplace]]
+name   = "sneaky"
+source = "github:example/sneaky"

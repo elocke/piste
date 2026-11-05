@@ -1,0 +1,447 @@
+# piste setup: the prerequisite checklist, the checkout (cloned at
+# the newest release unless setup runs in one), the overlay (add <url>, else
+# the one that has this machine, else asked: a URL to add or Enter for init),
+# then the first switch, offered.
+env USER=jane
+exec sh mkremote.sh
+cp hosts-here.json $WORK/replies/nix-eval
+
+# Flakes off: every check listed with its fix, then a stop before cloning.
+cp nix-config-off.txt $WORK/replies/nix-config
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/other
+stdout '✓ Nix'
+stderr '✗ flakes: .*experimental-features = nix-command flakes'
+! exists $WORK/home/other
+cp nix-config-on.txt $WORK/replies/nix-config
+
+# A --from that isn't there: git's own message.
+! exec piste setup --from file://$WORK/nope.git --dir $WORK/home/p4
+stderr 'does not appear to be a git repository'
+
+# A --from that isn't the engine: its clone removed, so a re-run can clone.
+! exec piste setup --from file://$WORK/remote/plain.git --dir $WORK/home/p5
+stderr 'not a piste engine'
+! exists $WORK/home/p5
+
+# A --dir holding the user's own things: refused, left as it was.
+mkdir $WORK/mine
+cp note.txt $WORK/mine/note.txt
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/mine
+stderr '--dir'
+cmp $WORK/mine/note.txt note.txt
+
+# A fresh machine with an overlay to add: cloned at the newest release
+# (v0.3.0-rc1 is a pre-release), the overlay added and built, the switch
+# taken. The user's own backup files survive that first switch. Before the
+# question, what the switch changes, read from the built generation: the
+# files of yours it moves aside (not its own links, not the same bytes),
+# and on a Mac the Homebrew apps and the sudo prompt. After a Linux switch,
+# a login shell that isn't zsh gets the commands that change it.
+cp note.txt $WORK/home/.zshrc.backup
+exec sh mkgen.sh
+cp getent-bash.txt $WORK/replies/getent
+stdin yes.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/piste file://$WORK/remote/mine.git
+stdout 'The switch moves 2 files of yours aside, to put its own in their place:\n  ~/.config/app → ~/.config/app.backup-<time>\n  ~/.zshrc → ~/.zshrc.backup-<time>\n'
+! stdout 'gitconfig'
+stdout '~/.bashrc is a link of yours: the switch stops on it; move it away first'
+! stdout 'Couldn''t build this machine'
+[darwin] stdout 'It installs Homebrew apps and changes some macOS settings \(the README lists them\); sudo will ask for your password'
+[linux] ! stdout 'Homebrew'
+! stdout 'has a (home-manager generation|nix-darwin system) already'
+grep '^nix build --no-link --print-out-paths .*overlays/mine#(homeConfigurations."jane@testhost".activationPackage|darwinConfigurations."testhost".system) --override-input piste git\+file://.*/home/piste$' $WORK/calls
+grep '(?s)nix build --no-link --print-out-paths.*\n(home-manager switch|sudo darwin-rebuild switch)' $WORK/calls
+[linux] stdout 'Switched. Open a new shell'
+[darwin] stdout 'Switched. Open Ghostty'
+[linux] stdout 'Your login shell is still bash, and piste sets up zsh'
+[linux] stdout '  echo ~/.nix-profile/bin/zsh \| sudo tee -a /etc/shells && chsh -s ~/.nix-profile/bin/zsh'
+[darwin] ! stdout 'login shell'
+rm $WORK/replies/getent
+stdout '✓ git'
+! stdout 'identity'
+! stderr 'detached HEAD'
+! stdout 'commit'
+exec git -C $WORK/home/piste describe --tags
+stdout '^v0.2.0$'
+exists $WORK/home/piste/overlays/mine/flake.nix
+grep '^(nix build|darwin-rebuild build) .*overlays/mine' $WORK/calls
+grep '^(home-manager switch|sudo darwin-rebuild switch) .*overlays/mine' $WORK/calls
+exists $WORK/home/.zshrc.backup
+
+# Again, from inside: no clone, no new overlay (mine has this machine), the
+# switch offered and declined. This machine has a generation now (another
+# tool's, or piste's older one): the switch replaces it, and rollback goes
+# back; on the generation the switch would activate, it says so.
+cd $WORK/home/piste
+rm $WORK/calls
+exec sh $WORK/mkprofile.sh $WORK/old-gen
+stdin $WORK/no.txt
+exec piste setup
+stdout 'Using the piste checkout at .*/home/piste'
+stdout 'overlays/mine has this machine'
+! stdout 'Git URL'
+stdout 'This machine has a (home-manager generation|nix-darwin system) already \(generation 3\): the switch replaces it, and piste rollback goes back to it'
+stdout 'Switch this machine to it now'
+! grep '^(home-manager switch|sudo darwin-rebuild switch)' $WORK/calls
+exec sh $WORK/mkprofile.sh $WORK/gen
+stdin $WORK/no.txt
+exec piste setup
+stdout 'This machine is on this (home-manager generation|nix-darwin system) already'
+exec sh $WORK/mkprofile.sh
+rm $WORK/replies/nix-build-__no_link
+
+# Again with the same URL (from shell history): the overlay already there is
+# used, nothing re-cloned.
+stdin $WORK/no.txt
+exec piste setup file://$WORK/remote/mine.git
+stdout 'overlays/mine is file://.*/remote/mine.git'
+stdout 'Switch this machine to it now'
+! stderr 'exists'
+
+# --dir and --from mean nothing in a checkout: said so. A build that fails
+# before the question (nix's error above it) gets piste's line, then the
+# question.
+env SHIM_EXIT_NIX_BUILD=1
+stdin $WORK/no.txt
+exec piste setup --dir $WORK/elsewhere
+stdout '--dir/--from: not used'
+stdout '(?s)Couldn''t build this machine to say what the switch changes \(above\); the switch will try the same build.*Switch this machine to it now'
+env SHIM_EXIT_NIX_BUILD=
+
+# No gh yet (a fresh machine): no warning that it isn't logged in, and after
+# the switch, the line that logs it in and sets up the GitHub key.
+stdin $WORK/yes.txt
+exec sh $WORK/nogh-piste setup --overlay mine
+! stdout 'isn''t logged in'
+! stderr 'isn''t logged in'
+stdout 'Switched'
+stdout '  gh auth login --hostname github.com --git-protocol ssh --web --skip-ssh-key && piste github    # a GitHub SSH key, once gh is here'
+# With gh there, not logged in: the warning before, no line after.
+stdin $WORK/no.txt
+exec piste setup --overlay mine
+stdout 'gh isn''t logged in'
+! stdout 'piste github    # a GitHub SSH key'
+cd $WORK
+
+# ~/piste is a checkout, setup run outside it: that one is used.
+stdin no.txt
+exec piste setup
+stdout 'Using the piste checkout at .*/home/piste'
+
+# --dir a symlink to a checkout: used.
+symlink $WORK/link -> $WORK/home/piste
+stdin no.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/link
+stdout 'Using the piste checkout at'
+
+# --dir an empty directory: cloned into.
+mkdir $WORK/home/empty
+stdin no.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/empty file://$WORK/remote/mine.git
+exists $WORK/home/empty/.piste $WORK/home/empty/overlays/mine/flake.nix
+
+# A local overlay path is the user's, from where they are.
+mkdir $WORK/elsewhere
+cd $WORK/elsewhere
+stdin $WORK/no.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p6 ../remote/mine.git
+exists $WORK/home/p6/overlays/mine/flake.nix
+cd $WORK
+
+# The end of the input at the URL prompt (Ctrl-D): stopped, nothing made.
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p7
+stderr 'No answer'
+! exists $WORK/home/p7/overlays/personal
+
+# The build fails: setup stops there, no switch offered.
+env SHIM_EXIT_NIX_BUILD=1
+env SHIM_EXIT_DARWIN_REBUILD=1
+stdin yes.txt
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p8 file://$WORK/remote/mine.git
+! stdout 'Switch this machine'
+env SHIM_EXIT_NIX_BUILD=
+env SHIM_EXIT_DARWIN_REBUILD=
+
+# A fresh machine, nothing to add: Enter, then init's answers on the same
+# stdin (only the git identity typed), then no switch.
+rm $WORK/calls
+stdin init-answers.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p2
+exists $WORK/home/p2/overlays/personal/flake.nix
+grep 'name = "Jane Doe"' $WORK/home/p2/overlays/personal/home.nix
+stdout 'git -C overlays/personal commit -m ''My overlay'' && gh repo create personal --private --source overlays/personal --push    # keep it, in a private repo'
+grep '^(nix build|darwin-rebuild build) .*overlays/personal' $WORK/calls
+! grep '^(home-manager switch|sudo darwin-rebuild switch)' $WORK/calls
+
+# init made the overlay for another system (not built here): not an overlay
+# without this machine, so no offer to add it; setup stops, init said why.
+[!darwin] stdin init-other-darwin.txt
+[darwin] stdin init-other-linux.txt
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p9
+stdout 'Not building'
+! stdout 'Add this machine'
+stdout 'Setup stopped before the switch'
+
+# A github.com overlay that won't clone (a private repo, and no GitHub key
+# on a fresh machine): git's error, then the https URL to use with gh's login.
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p10 git@github.com:jane/overlay.git
+stdout 'log gh in, then run this again with the https URL'
+stdout '  nix run nixpkgs#gh -- auth login --web --git-protocol https\n  https://github.com/jane/overlay.git'
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p10 file://$WORK/nope.git
+! stdout 'https URL'
+
+# The overlay step fails: setup stops there, no switch offered.
+stdin yes.txt
+! exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p3 file://$WORK/remote/plain.git
+stderr 'not a piste overlay'
+! stdout 'Switch this machine'
+
+# Two overlays have this machine: setup asks for --overlay, and takes it.
+exec git clone -q $WORK/remote/mine.git $WORK/home/piste/overlays/mine2
+cd $WORK/home/piste
+! exec piste setup
+stderr 'piste setup --overlay'
+stdin $WORK/no.txt
+exec piste setup --overlay mine2
+stdout 'overlays/mine2'
+stdout 'Switch this machine to it now'
+
+# An overlay made on another machine, with secrets for that machine's key:
+# setup offers to add this machine, adds it, and doesn't offer the
+# switch until the other machine has re-encrypted the secrets.
+env HOME=$WORK/homeA
+mkdir $WORK/homeA
+cd $WORK/src
+exec piste init two --no-build --sops --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec sh $WORK/mktwo.sh
+env HOME=$WORK/home
+chmod 0755 $WORK/bin/nix
+env PATH=$WORK/bin${:}$PATH
+cd $WORK/home/piste
+stdin $WORK/yes.txt
+exec piste setup file://$WORK/remote/two.git
+stdout 'overlays/two has no host for this machine \((jane@)?testhost\)\.$'
+! stdout 'adds it'
+stdout 'Add this machine to it\?'
+[!darwin] stdout 'Roles from overlays/two''s other Linux host \(jane@othermachine\): dev; --role sets others$'
+[darwin] stdout 'Roles from overlays/two''s other Mac host \(othermachine\): none; --role sets others$'
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\) to overlays/two'
+stdout 'This machine''s key is in overlays/two/.sops.yaml'
+stdout 'To finish:'
+! stdout 'Switch this machine'
+# Again: it has this machine now, but still can't read its secrets.
+stdin $WORK/yes.txt
+exec piste setup --overlay two
+stdout 'overlays/two has this machine'
+stdout 'This machine can''t read overlays/two''s secrets yet: piste host add says what''s left'
+! stdout 'Switch this machine'
+! grep '^(home-manager switch|sudo darwin-rebuild switch) .*overlays/two' $WORK/calls
+
+# An overlay without this machine, the offer declined: stopped, with the
+# command that adds it later.
+stdin $WORK/no.txt
+! exec piste setup file://$WORK/remote/mine.git
+stdout 'overlays/mine has no host for this machine \((jane@)?testhost\)\.$'
+stdout 'Add this machine to it\?'
+stdout 'Setup stopped\. To add this machine when you want it: cd .*/piste && piste host add --overlay mine$'
+# No answer at all (the end of the input): stopped too, nothing written. two2
+# has a home.nix, so a yes would have staged this machine's files.
+exec git clone -q $WORK/remote/two.git overlays/two2
+! exec piste setup --overlay two2
+stdout 'Add this machine to it\?'
+stdout 'Setup stopped\. To add this machine when you want it: cd .*/piste && piste host add --overlay two2$'
+! stdout 'Added'
+exec git -C overlays/two2 status --porcelain
+! stdout .
+
+# A first run through nix run, from outside the checkout (no piste on PATH):
+# setup moves into ~/piste, the person's shell doesn't, so each command it
+# prints starts with the cd that gets there, once.
+cd $WORK/home
+stdin $WORK/no.txt
+! exec sh $WORK/nopath-piste setup --overlay two2
+stdout 'Setup stopped\. To add this machine when you want it: cd ~/piste && nix run \.#piste -- host add --overlay two2$'
+# The offer taken, and the build fails: the build's and piste fix's lines.
+env SHIM_EXIT_NIX_BUILD=1
+env SHIM_EXIT_DARWIN_REBUILD=1
+stdin $WORK/yes.txt
+! exec sh $WORK/nopath-piste setup --overlay two2
+env SHIM_EXIT_NIX_BUILD=
+env SHIM_EXIT_DARWIN_REBUILD=
+stdout 'Added (jane@)?testhost'
+stdout '^Rerun with: cd ~/piste && nix run \.#piste -- --verbose build$'
+stdout '^To have Claude Code fix it: cd ~/piste && nix run \.#piste -- fix --overlay two2 --(profile jane@testhost|host testhost)$'
+stdout '^overlays/two2: this machine was added; fix the build and run: cd ~/piste && nix run \.#piste -- build --overlay two2$'
+
+-- mkgen.sh --
+# The generation the switch would activate (nix build --print-out-paths
+# answers with it): its home-files link .zshrc, .gitconfig, .bashrc and
+# .config/app; in the home, a real .zshrc, a .gitconfig with the same bytes,
+# a real .config/app directory and a .bashrc linked to the person's own
+# dotfiles (stow's way).
+set -e
+g=$WORK/gen; s=$WORK/gen-src
+mkdir -p "$g/home-files/.config" "$s/app" "$WORK/home/.config/app" "$WORK/home/dotfiles"
+echo piste > "$s/zshrc"; echo same > "$s/gitconfig"; echo x > "$s/app/x"; echo piste > "$s/bashrc"
+ln -s "$s/zshrc" "$g/home-files/.zshrc"
+ln -s "$s/gitconfig" "$g/home-files/.gitconfig"
+ln -s "$s/app" "$g/home-files/.config/app"
+ln -s "$s/bashrc" "$g/home-files/.bashrc"
+echo mine > "$WORK/home/.zshrc"; echo same > "$WORK/home/.gitconfig"; echo mine > "$WORK/home/.config/app/y"
+echo mine > "$WORK/home/dotfiles/bashrc"; ln -s "$WORK/home/dotfiles/bashrc" "$WORK/home/.bashrc"
+mkdir -p "$WORK/old-gen"
+echo "$g" > "$WORK/replies/nix-build-__no_link"
+-- mkprofile.sh --
+# The profile the switch moves, at generation 3 pointing at $1 (none without
+# an argument): nix-darwin's system profile on a Mac, else home-manager's.
+set -e
+d=$WORK/.machine/profiles/per-user/jane; p=home-manager
+[ "$(uname)" = Darwin ] && d=$WORK/.machine/profiles && p=system
+mkdir -p "$d"
+rm -f "$d/$p" "$d/$p-3-link"
+[ -n "$1" ] || exit 0
+ln -s "$1" "$d/$p-3-link"
+ln -s "$p-3-link" "$d/$p"
+-- getent-bash.txt --
+jane:x:1000:1000:Jane:/home/jane:/bin/bash
+-- nogh-piste --
+# piste on a machine without gh (a fresh one: the switch brings it): every
+# directory holding a gh leaves PATH, its other tools linked in nogh/.
+p=$(command -v piste)
+mkdir -p "$WORK/nogh"
+keep=
+IFS=:
+for d in $PATH; do
+  if [ -x "$d/gh" ]; then
+    for f in "$d"/*; do
+      n=${f##*/}
+      [ "$n" = gh ] || [ -e "$WORK/nogh/$n" ] || ln -s "$f" "$WORK/nogh/$n"
+    done
+  else
+    keep=${keep:+$keep:}$d
+  fi
+done
+unset IFS
+PATH=$WORK/nogh:$keep
+export PATH
+exec "$p" "$@"
+-- nopath-piste --
+# piste with no piste on PATH, as `nix run .#piste --` runs it: every
+# directory holding one leaves PATH.
+p=$(command -v piste)
+keep=
+IFS=:
+for d in $PATH; do
+  [ -x "$d/piste" ] || keep=${keep:+$keep:}$d
+done
+unset IFS
+PATH=$keep
+export PATH
+exec "$p" "$@"
+-- hosts-here.json --
+{"darwin": ["testhost"], "home": ["jane@testhost"]}
+-- nix-config-on.txt --
+fetch-closure flakes nix-command
+-- nix-config-off.txt --
+nix-command
+-- note.txt --
+mine
+-- yes.txt --
+y
+-- no.txt --
+n
+-- init-answers.txt --
+
+
+
+
+
+
+
+Jane Doe
+jane@example.com
+
+
+n
+-- init-other-darwin.txt --
+
+
+aarch64-darwin
+
+
+
+
+Jane Doe
+jane@example.com
+
+
+y
+-- init-other-linux.txt --
+
+
+x86_64-linux
+
+
+
+
+Jane Doe
+jane@example.com
+
+
+y
+-- mktwo.sh --
+# overlays/two of the engine source (the first machine's checkout): its
+# secret for that machine's key, committed and pushed to remote/two.git.
+set -e
+cd "$WORK/src/overlays/two"
+pub=$(sed -n 's/^# public key: //p' "$WORK/homeA/.config/sops/age/keys.txt")
+printf 'token: ENC[AES256_GCM,data:eA==,type:str]\nsops:\n    age:\n        - recipient: %s\n          enc: x\n' "$pub" > secrets/env/api-keys.sops.yaml
+git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+git clone -q --bare . "$WORK/remote/two.git"
+-- bin/nix --
+#!/bin/sh
+# nix, answering the hosts eval and the roles eval from the flake's own
+# hosts."…" lines (each with its roles = [ … ]; line after it); the rest goes
+# to the shared shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+for a in "$@"; do case "$a" in *'#.') f="${a%#.}/flake.nix" ;; esac; done
+case "$*" in
+*piste.roles*)
+  case "$*" in *darwinConfigurations*) kind=darwin ;; *) kind=home ;; esac
+  exec awk -v kind="$kind" '
+    /^ *hosts\."[^"]*" = \{/ { n = $0; sub(/^ *hosts\."/, "", n); sub(/".*/, "", n) }
+    /^ *roles = \[/ && n != "" {
+      r = $0; sub(/^ *roles = \[ */, "", r); sub(/ *\].*/, "", r); gsub(/" "/, "\", \"", r)
+      if ((kind == "home") == (index(n, "@") > 0)) { out = out sep "\"" n "\": [" r "]"; sep = ", " }
+      n = ""
+    }
+    END { print "{\"roles\": {" out "}}" }' "$f" ;;
+esac
+home=; darwin=
+for n in $(sed -n 's/^ *hosts\."\([^"]*\)" = {.*/\1/p' "$f"); do
+  case "$n" in *@*) home="$home, \"$n\"" ;; *) darwin="$darwin, \"$n\"" ;; esac
+done
+printf '{"darwin": [%s], "home": [%s]}\n' "${darwin#, }" "${home#, }"
+-- mkremote.sh --
+set -e
+mkdir -p replies src
+cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+c() { git add -A && git -c user.name=t -c user.email=t@x commit -q -m "$1" && git tag "$1"; }
+git init -q -b main
+c v0.1.0
+echo 2 > VERSION && c v0.2.0
+echo 3 > VERSION && c v0.3.0-rc1
+cd .. && mkdir -p remote && git clone -q --bare src remote/piste.git
+repo() { # name flake-body
+  mkdir "src-$1" && cd "src-$1"
+  printf '%s\n' "$2" > flake.nix
+  git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+  cd .. && git clone -q --bare "src-$1" "remote/$1.git"
+}
+repo mine '{ outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }'
+repo plain '{ outputs = _: { }; }'

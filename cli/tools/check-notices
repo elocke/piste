@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# CI header check: every Go file with a rulesync
+# "Portions ported from" header is listed in THIRD_PARTY_NOTICES.md, and every
+# listed file has the header. Same check as notices_test.go, for a shell.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+header='// Portions ported from rulesync v22.0.0 (https://github.com/dyoshikawa/rulesync,'
+listed=$(sed -n '/<!-- ported-files:begin -->/,/<!-- ported-files:end -->/p' THIRD_PARTY_NOTICES.md \
+  | grep -oE '^\| `[^`]+\.go`' | sed -E 's/^\| `(.*)`$/\1/' | sort -u)
+headed=$(grep -rlF --include='*.go' -- "$header" . | sed 's|^\./||' | sort -u)
+rc=0
+while read -r f; do
+  [ -z "$f" ] && continue
+  head -1 "$f" | grep -qF -- "$header" || { echo "header not on line 1: $f"; rc=1; }
+  grep -qxF -- "$f" <<<"$listed" || { echo "missing from THIRD_PARTY_NOTICES.md: $f"; rc=1; }
+done <<<"$headed"
+while read -r f; do
+  [ -z "$f" ] && continue
+  grep -qxF -- "$f" <<<"$headed" || { echo "listed but has no header (or missing): $f"; rc=1; }
+done <<<"$listed"
+[ $rc -eq 0 ] && echo "check-notices: $(wc -l <<<"$listed") ported files, headers and notices agree"
+exit $rc

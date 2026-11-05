@@ -1,0 +1,8 @@
+# A zone source declaring one third-party marketplace a zone has no reason
+# to allow. Under the zone's own unlisted = "deny" policy, a host with it
+# must fail evaluation (zoneChecks' zone-unapproved-rejected, which zoneChecks
+# skips for a zone whose allow list takes this source). No [policy]: the
+# zone's real one applies.
+[[claude.marketplace]]
+name = "zone-check-unapproved"
+source = "github:zone-check/unapproved"

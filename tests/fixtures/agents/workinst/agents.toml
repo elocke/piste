@@ -1,0 +1,9 @@
+# Installers are refused in a deny zone unless installers = true.
+[policy]
+allow    = ["claude:market", "npm:@example/vendor"]
+unlisted = "deny"
+
+[[hook]]
+name      = "vendor"
+installer = "npm:@example/vendor"
+version   = "1.0.0"

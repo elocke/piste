@@ -1,0 +1,5 @@
+# Work zone fixture: a deny-unlisted zone policy.
+# The shared fixture's plugins come from the undeclared "market".
+[policy]
+allow    = ["claude:market"]
+unlisted = "deny"

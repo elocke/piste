@@ -1,0 +1,17 @@
+# zone_work_refuses_personal: add personal:* in a
+# zone = "work" project → refused, even on a personal machine.
+
+mkdir proj/.git
+cd proj
+cp .agents/agents.toml manifest.orig
+! exec piste agents add personal:skill/beta $RS $RP
+stderr 'is personal content; this project is zone = "work" \(refused\)'
+cmp .agents/agents.toml manifest.orig
+! exists .agents/skills/beta
+
+exec piste agents add shared:skill/alpha $RS $RP
+exists .agents/skills/alpha
+
+-- proj/.agents/agents.toml --
+zone = "work"
+harnesses = ["claude", "codex"]

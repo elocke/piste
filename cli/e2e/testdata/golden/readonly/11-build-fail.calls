@@ -1,0 +1,1 @@
+nix build $WORK/flake#homeConfigurations."tester@q".activationPackage

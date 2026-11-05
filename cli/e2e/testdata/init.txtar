@@ -1,0 +1,225 @@
+# piste init: a new overlay in overlays/<name>/ from the checkout's
+# templates/default, its files staged, the engine pinned to the checkout's
+# release; refusals; defaults from stdin; sops keeps an existing key.
+env USER=jane
+exec sh mkcheckout.sh
+
+# Outside a checkout: refused.
+! exec piste init x --no-build
+stderr 'run inside a piste checkout'
+
+cd ck
+
+# Every answer as a flag.
+exec piste init mine --no-build --user jane --host devbox --system x86_64-linux --role dev --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exists overlays/mine/flake.nix overlays/mine/hosts/devbox.nix overlays/mine/.gitignore overlays/mine/agents/presets/default.toml
+! exists overlays/mine/hosts/linux.nix
+! exists overlays/mine/hosts/darwin.nix
+grep 'piste.url = "git\+ssh://git@github.com/elocke/piste.git\?ref=refs/tags/v0.1.0"' overlays/mine/flake.nix
+grep 'hosts."jane@devbox"' overlays/mine/flake.nix
+# What's hers on every machine is in home.nix; the host file has this one's.
+grep 'overlays/mine/agents' overlays/mine/home.nix
+! grep 'piste.agents' overlays/mine/hosts/devbox.nix
+# The checkout is outside $HOME here: its absolute path (TestCheckoutExpr
+# covers one under $HOME).
+grep 'piste.checkout = "/.*/ck";' overlays/mine/hosts/devbox.nix
+# This user's home, as it is here ($USER is jane), when here is Linux too;
+# made on a Mac, a Linux host gets the usual place.
+[!darwin] grep 'homeDirectory = ".*/home";' overlays/mine/hosts/devbox.nix
+[darwin] grep 'homeDirectory = "/home/jane";' overlays/mine/hosts/devbox.nix
+exec git -C overlays/mine ls-files
+stdout '^\.gitignore$'
+stdout '^flake.nix$'
+stdout '^home.nix$'
+stdout '^hosts/devbox.nix$'
+# Codex reads AGENTS.md from the git root down; Claude Code, through CLAUDE.md.
+stdout '^AGENTS.md$'
+grep '^@AGENTS.md$' overlays/mine/CLAUDE.md
+stdout '^agents/presets/default.toml$'
+exec git -C overlays/mine symbolic-ref HEAD
+stdout '^refs/heads/main$'
+# The checkout's own git state is untouched.
+exec git status --porcelain
+! stdout .
+
+# The same name again: refused.
+! exec piste init mine --no-build --user jane --host devbox --system x86_64-linux --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+stderr 'overlays/mine exists'
+! stdout 'sops'
+
+# Bad answers: refused, nothing written.
+! exec piste init bad --no-build --user jane --host 'my mac' --system x86_64-linux --zone personal --git-name J --git-email j@x
+stderr '--host'
+! exec piste init bad --no-build --user jane --host devbox --system x86_64-linux --role container --zone personal --git-name J --git-email j@x
+stderr 'container'
+! exists overlays/bad
+
+# A bad flag value: refused before the first question.
+! exec piste init z --no-build --zone 'Bad Zone'
+stderr '\(--zone\)'
+! stdout 'User'
+
+# On a Mac, a Linux host for the same user: /home/<user>, not this Mac's home.
+[darwin] exec piste init xl --no-build --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+[darwin] grep 'homeDirectory = "/home/jane";' overlays/xl/hosts/devbox.nix
+
+# A bad answer typed at a prompt: said why (naming no flag: none was given),
+# asked again; the answers before it kept.
+stdin $WORK/bad-host.txt
+exec piste init typed --no-build --user jane --system x86_64-linux --role dev --zone personal --git-name J --git-email j@x
+stdout 'hostname "my mac": letters, digits'
+! stdout '--host'
+exists overlays/typed/hosts/devbox.nix
+
+# A bad answer, then the end of the input: refused, nothing written.
+stdin $WORK/bad-host-eof.txt
+! exec piste init gone --no-build --user jane --system x86_64-linux --role dev --zone personal --git-name J --git-email j@x
+stderr 'hostname "my mac"'
+! exists overlays/gone
+
+# No default: no brackets; `none` is no roles.
+stdin $WORK/roles-none.txt
+exec piste init r --no-build --user jane --host devbox --system x86_64-linux --zone personal
+stdout 'Git name: '
+! stdout '\[none\]'
+grep 'roles = \[ \];' overlays/r/flake.nix
+
+# Another user: their home is a guess, /home/<user>.
+exec piste init u --no-build --user bob --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+grep 'homeDirectory = "/home/bob";' overlays/u/hosts/devbox.nix
+
+# A failure after the files are written (here sops can't make its key
+# directory): the half-made overlay is removed, so a re-run can make it.
+mkdir $HOME/.config/sops
+cp $WORK/empty.txt $HOME/.config/sops/age
+! exec piste init s0 --no-build --sops --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+stdout 'overlays/s0 removed'
+! exists overlays/s0
+rm $HOME/.config/sops/age
+
+# Defaults: empty answers on stdin take them (user $USER, host this machine,
+# zone personal, name = the zone).
+stdin $WORK/empty.txt
+exec piste init --no-build --git-name 'Jane Doe' --git-email jane@example.com
+exists overlays/personal/flake.nix overlays/personal/hosts/testhost.nix
+grep 'user = "jane"' overlays/personal/flake.nix
+grep 'zone = "personal"' overlays/personal/flake.nix
+
+# sops: the first init makes an age key; the next keeps it, and both
+# .sops.yaml carry its public key.
+exec piste init s1 --no-build --sops --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+exists $HOME/.config/sops/age/keys.txt overlays/s1/.sops.yaml overlays/s1/secrets/env
+stdout 'Keep a copy of it in a password manager'
+cp $HOME/.config/sops/age/keys.txt key.before
+exec piste init s2 --no-build --sops --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+cmp $HOME/.config/sops/age/keys.txt key.before
+cmp overlays/s1/.sops.yaml overlays/s2/.sops.yaml
+grep '&devbox age1' overlays/s2/.sops.yaml
+! stdout 'password manager'
+
+# Building: this machine's system (detected), the build names the new overlay.
+exec piste init b --user jane --host devbox --zone personal --git-name J --git-email j@x
+grep '^(nix build|darwin-rebuild build) .*overlays/b' $WORK/calls
+[linux] grep 'homeConfigurations\."jane@devbox"\.activationPackage' $WORK/calls
+[darwin] grep '#devbox' $WORK/calls
+
+# A build that fails: said what was made and how to retry.
+env SHIM_EXIT_NIX=1
+env SHIM_EXIT_DARWIN_REBUILD=1
+! exec piste init bf --user jane --host devbox --zone personal --git-name J --git-email j@x
+stdout 'overlays/bf was created; fix the build and run'
+env SHIM_EXIT_NIX=0
+env SHIM_EXIT_DARWIN_REBUILD=0
+
+# Start minimal or with everything (the last question): minimal by default,
+# as mine took it at the end of the input. Everything (--extras or typed)
+# puts the extras role after the others; on a Mac, alone. extras isn't one of
+# init's roles: --role extras, alone or with others, is refused before the
+# first question with the flag to use, and typed at the Roles prompt it is
+# asked again (the default dev stays; extras doesn't replace it).
+grep 'roles = \[ "dev" \];' overlays/mine/flake.nix
+exec piste init x1 --no-build --extras --user jane --host devbox --system x86_64-linux --role dev --zone personal --git-name J --git-email j@x
+grep 'roles = \[ "dev" "extras" \];' overlays/x1/flake.nix
+! stdout 'Start minimal'
+! exec piste init x2 --no-build --user jane --host devbox --system x86_64-linux --role extras,dev --zone personal --git-name J --git-email j@x
+stderr 'role "extras": .*--extras.*\(--role\)'
+! stdout 'User'
+! exists overlays/x2
+! exec piste init x2 --no-build --user jane --host devbox --system x86_64-linux --role extras --zone personal --git-name J --git-email j@x
+stderr 'role "extras": .*--extras.*\(--role\)'
+! exists overlays/x2
+! exec piste init x2 --no-build --role foo --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+stderr 'role "foo": one of base, dev, desktop \(--role\)'
+stdin $WORK/typed-extras.txt
+exec piste init x7 --no-build --sops=false --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+stdout 'role "extras": .*--extras'
+stdout 'Roles \(base, dev, desktop, or none; .*\) \[dev\]: '
+grep 'roles = \[ "dev" \];' overlays/x7/flake.nix
+stdin $WORK/typed-extras.txt
+exec piste init x8 --no-build --sops=false --extras=false --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+grep 'roles = \[ "dev" \];' overlays/x8/flake.nix
+exec piste init x3 --no-build --extras --user jane --host jane-mac --system aarch64-darwin --zone personal --git-name J --git-email j@x
+grep 'roles = \[ "extras" \];' overlays/x3/flake.nix
+stdin $WORK/everything.txt
+exec piste init x4 --no-build --sops=false --user jane --host devbox --system x86_64-linux --role dev --zone personal --git-name J --git-email j@x
+stdout 'Start minimal or with everything .*\[minimal\]: '
+grep 'roles = \[ "dev" "extras" \];' overlays/x4/flake.nix
+stdin $WORK/bad-start.txt
+exec piste init x5 --no-build --sops=false --user jane --host devbox --system x86_64-linux --role dev --zone personal --git-name J --git-email j@x
+stdout '"all": minimal or everything'
+grep 'roles = \[ "dev" \];' overlays/x5/flake.nix
+! exec piste init x6 --no-build --extras=false --role dev,extras --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+stderr 'role "extras": .*\(--role\)'
+! stdout 'User'
+! exists overlays/x6
+
+# No origin and no --engine: refused; --engine pins by hand.
+exec git remote remove origin
+! exec piste init o --no-build --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+stderr '--engine'
+! stdout 'sops'
+exec piste init o --no-build --engine github:me/piste/v1 --user jane --host devbox --system x86_64-linux --zone personal --git-name J --git-email j@x
+grep 'piste.url = "github:me/piste/v1"' overlays/o/flake.nix
+
+-- empty.txt --
+
+
+
+
+
+
+
+
+
+-- bad-host.txt --
+my mac
+devbox
+n
+-- bad-host-eof.txt --
+my mac
+-- roles-none.txt --
+none
+Jane
+j@x
+n
+-- everything.txt --
+everything
+-- typed-extras.txt --
+extras
+
+
+-- bad-start.txt --
+all
+m
+-- mkcheckout.sh --
+set -e
+mkdir ck && cd ck
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main
+git add -A
+git -c user.name=t -c user.email=t@t commit -q -m init
+git remote add origin git@github.com:elocke/piste.git
+git tag v0.1.0

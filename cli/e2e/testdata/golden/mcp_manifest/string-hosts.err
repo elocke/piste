@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 'bad': hosts must be a list of host names, not string ("box1")

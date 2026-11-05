@@ -1,0 +1,8 @@
+╭─────────────────────────╮
+│ Overlay package updates │
+╰─────────────────────────╯
+Checking o/tool...
+  Prefetching tool-2.0.0-linux.tar.gz...
+Package  Current  Latest  Status
+30-tool  1.0.0    2.0.0   updated
+Updated 1 package(s). Run 'piste build' to test.

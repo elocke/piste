@@ -1,0 +1,65 @@
+# registry_artifact: `registry build` writes registry.json +
+# content/ from explicit roots; Load re-hashes every payload. A project gets
+# the same lock from the built registry as from the live roots (the lock
+# holds no machine-specific root paths), and a changed payload is refused.
+
+exec piste agents registry build --out reg $RS $RP --zone personal
+stdout 'wrote reg \(zone personal\): .*1 agent'
+exists reg/registry.json
+
+exec piste agents --registry reg registry info
+stdout '^zone: +personal'
+
+# search / show / list: generated metadata.
+exec piste agents --registry reg search alpha
+stdout '^shared:skill/alpha\t'
+! stdout gamma
+exec piste agents --registry reg search --kind mcp
+stdout '^shared:mcp/demo'
+! exec piste agents --registry reg search --in-zone work
+stderr 'no match'
+exec piste agents --registry reg show shared:skill/alpha --json
+stdout '"trust": "first-party"'
+stdout '"allowed-tools"'
+stdout '"content_hash": "[0-9a-f]{64}"'
+exec piste agents --registry reg show shared:mcp/demo
+stdout '^requires: +command: demo-mcp, env: DEMO_TOKEN'
+exec piste agents --registry reg list --kind skill
+stdout '^personal:skill/beta'
+
+# A personal registry never holds work content.
+! exec piste agents registry build --out reg2 $RS $RW --zone personal
+stderr 'work content'
+! exists reg2
+
+# Same lock from the live roots and from the built registry.
+cd a
+exec piste agents add shared:skill/alpha shared:mcp/demo personal:skill/beta $RS $RP
+cd ../b
+exec piste agents --registry ../reg add shared:skill/alpha shared:mcp/demo personal:skill/beta
+cd ..
+cmp a/.agents/agents.lock b/.agents/agents.lock
+! grep '\[\[root\]\]' a/.agents/agents.lock
+exec piste agents --registry reg drift --ci --root a
+
+# pull installs it as the default registry (~/.local/share/piste-agents/registry).
+exec piste agents registry pull reg
+stdout 'installed .*piste-agents/registry \(zone personal\)'
+exec piste agents registry info
+stdout '^registry: .*/home/.local/share/piste-agents/registry'
+! exec piste agents registry pull reg --zone work
+stderr 'is a personal registry; this machine is work \(refused\)'
+
+# A payload changed after the build is refused, never used.
+replace 'Gamma.' 'Evil.' home/.local/share/piste-agents/registry/content/shared/skill/gamma@ac5e51bc01cf/gamma/SKILL.md
+! exec piste agents list
+stderr 'the registry was changed after it was built'
+
+-- a/.git/HEAD --
+-- b/.git/HEAD --
+-- a/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- b/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

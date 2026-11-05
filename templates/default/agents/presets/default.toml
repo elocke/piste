@@ -1,0 +1,3 @@
+# The preset this overlay's hosts select (with the engine's `base`).
+targets = ["claude", "codex"]
+skills = []

@@ -1,0 +1,4 @@
+piste-agents: running: claude plugin uninstall piste-harness@piste-local
+piste-agents: running: claude plugin marketplace remove piste-local
+piste-agents: updating owned hook entries in $WORK/h/.codex/hooks.json
+piste-agents sync: this generation declares no third-party items

@@ -1,0 +1,116 @@
+# piste init --layer: an overlay on a team layer, from the layer's
+# starter. The zone is the layer's; with sops (the default when the layer
+# names secrets) its secret names go into an encrypted skeleton. A repo that
+# isn't a layer, a clone that fails and another zone are refused, with
+# nothing written.
+env USER=jane
+exec sh mkcheckout.sh
+exec sh mklayer.sh
+cd ck
+
+# Every answer as a flag; the zone and the name come from the layer.
+exec piste init --layer file://$WORK/team.git --sops --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+exists overlays/work/flake.nix overlays/work/hosts/devbox.nix overlays/work/.sops.yaml overlays/work/secrets/env/api-keys.sops.yaml
+grep 'url = "git\+file://.*/team.git";' overlays/work/flake.nix
+grep 'inputs.piste.follows = "piste";' overlays/work/flake.nix
+grep 'zone = "work";' overlays/work/flake.nix
+grep 'enable = true;' overlays/work/hosts/devbox.nix
+stdout 'Created overlays/work'
+stdout 'Start minimal or with everything .*\[minimal\]: '
+# The skeleton: the layer's secret names, empty, encrypted in place (the sops
+# shim leaves the plaintext).
+grep '^sops -e -i secrets/env/api-keys.sops.yaml' $WORK/calls
+grep '^example:' overlays/work/secrets/env/api-keys.sops.yaml
+grep '^  token: ""' overlays/work/secrets/env/api-keys.sops.yaml
+exec git -C overlays/work ls-files
+stdout '^secrets/env/api-keys.sops.yaml$'
+stdout '^hosts/devbox.nix$'
+! stdout 'piste-layer.toml'
+
+# The layer's starter gets "Start minimal or with everything?" too: minimal
+# by default (asked, the end of the input taken, above), and with --extras
+# the extras role after the starter's roles.
+grep 'roles = \[ "dev" \];' overlays/work/flake.nix
+exec piste init w8 --layer file://$WORK/team.git --extras --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+grep 'roles = \[ "dev" "extras" \];' overlays/w8/flake.nix
+! stdout 'Start minimal'
+
+# Secrets default to on when the layer names any.
+exec piste init w2 --layer file://$WORK/team.git --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+exists overlays/w2/secrets/env/api-keys.sops.yaml
+grep 'enable = true;' overlays/w2/hosts/devbox.nix
+
+# No sops: the names still land, unencrypted with empty values and a header
+# saying how to fill them in later; secrets stay off until then.
+exec piste init w6 --layer file://$WORK/team.git --sops=false --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+grep '^  token: ""' overlays/w6/secrets/env/api-keys.sops.yaml
+grep 'piste secrets edit secrets/env/api-keys.sops.yaml' overlays/w6/secrets/env/api-keys.sops.yaml
+grep 'enable = false;' overlays/w6/hosts/devbox.nix
+! exists overlays/w6/.sops.yaml
+# A value typed into that plaintext file by hand: build and secrets init
+# refuse it, before nix or sops run, until it's out again.
+cd overlays/w6
+cp $WORK/api-keys.typed secrets/env/api-keys.sops.yaml
+! exec piste build
+stderr 'secrets/env/api-keys.sops.yaml holds values but isn.t encrypted'
+! exec piste secrets init
+stderr 'piste secrets init refuses it'
+! exists .sops.yaml
+cp $WORK/api-keys.empty secrets/env/api-keys.sops.yaml
+# Later: secrets init, then secrets edit encrypts the file before opening it.
+exec piste secrets init
+exec piste secrets edit secrets/env/api-keys.sops.yaml
+grep 'sops -e -i .*secrets/env/api-keys.sops.yaml' $WORK/calls
+cd ../..
+
+# The layer as the git+ ref piste prints ("On the team layer git+file://…").
+exec piste init w7 --layer git+file://$WORK/team.git --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+grep 'url = "git\+file://.*/team.git";' overlays/w7/flake.nix
+
+# Another zone: refused before anything is written.
+! exec piste init w3 --layer file://$WORK/team.git --zone personal --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+stderr 'zone work'
+! exists overlays/w3
+
+# Not a team layer: refused, nothing left.
+! exec piste init w4 --layer file://$WORK/plain.git --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+stderr 'not a team layer'
+! exists overlays/w4
+
+# The clone fails: git's message, nothing left.
+! exec piste init w5 --layer file://$WORK/missing.git --no-build --user jane --host devbox --system x86_64-linux --role dev --git-name 'Jane Doe' --git-email jane@example.com
+stderr 'missing.git'
+! exists overlays/w5
+# Nothing left behind: no partial overlay, and no clone of the layer in the
+# temporary directory (failed runs above included).
+exec ls -A overlays
+! stdout '^\.?piste-'
+exec ls -A $WORK/.tmp
+! stdout 'piste-layer-'
+
+-- mkcheckout.sh --
+set -e
+mkdir ck && cd ck
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main
+git add -A
+git -c user.name=t -c user.email=t@t commit -q -m init
+git remote add origin git@github.com:elocke/piste.git
+git tag v0.1.0
+-- mklayer.sh --
+set -e
+mkdir team && cp -r "$LAYER"/. team/ && chmod -R u+w team
+git -C team init -q -b main && git -C team add -A && git -C team -c user.name=t -c user.email=t@t commit -q -m layer
+git clone -q --bare team team.git
+mkdir plain && printf '{ outputs = _: { }; }\n' > plain/flake.nix
+git -C plain init -q -b main && git -C plain add -A && git -C plain -c user.name=t -c user.email=t@t commit -q -m plain
+git clone -q --bare plain plain.git
+-- api-keys.typed --
+example:
+  token: typed-by-hand
+-- api-keys.empty --
+example:
+  token: ""

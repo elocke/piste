@@ -1,0 +1,2 @@
+nix eval --json $WORK/piste/overlays/o#homeConfigurations --apply builtins.attrNames --no-write-lock-file
+home-manager switch -b backup-N --flake $WORK/piste/overlays/o#tester@linux --override-input piste git+file://$WORK/piste

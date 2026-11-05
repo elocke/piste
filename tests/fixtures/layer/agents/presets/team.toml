@@ -1,0 +1,3 @@
+# The preset every home on the team selects (with the engine's `base`).
+targets = ["claude", "codex"]
+skills = []

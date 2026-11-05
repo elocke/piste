@@ -1,0 +1,6 @@
+# A deny-unlisted zone whose allow list takes every github: source, so it
+# allows the marketplace of lib/fixtures/unapproved: zoneChecks has nothing
+# to reject there and emits no zone-unapproved-rejected (zone-checks-selftest).
+[policy]
+allow = ["github:*"]
+unlisted = "deny"

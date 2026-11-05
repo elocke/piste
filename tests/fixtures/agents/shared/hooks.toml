@@ -1,0 +1,17 @@
+[[hook]]
+name = "guard"
+event = "preToolUse"
+matcher = "Bash"
+script = "guard.sh"
+targets = ["claude"]
+
+[[hook]]
+name = "both"
+event = "stop"
+matcher = ""
+script = "guard.sh"
+timeout = 5
+targets = ["claude", "codex"]
+
+[replaces]
+claude_plugins = ["old@market"]

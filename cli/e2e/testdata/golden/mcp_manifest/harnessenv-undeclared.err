@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 't': harnessEnv.claude-code names a harness the server is not declared for

@@ -1,0 +1,1 @@
+nh clean all --keep-since 7d --keep 2 --dry

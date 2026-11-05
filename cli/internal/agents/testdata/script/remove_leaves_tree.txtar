@@ -1,0 +1,23 @@
+# remove_leaves_tree: add then remove of every kind leaves
+# the project byte-identical: files, merged keys, managed blocks, the
+# directories piste created and the lock (none is left when nothing is used).
+
+mkdir proj/.git
+cd proj
+snaptree . ../before
+
+exec piste agents add shared:skill/alpha shared:agent/rev shared:instruction/never shared:hook/guard shared:permission/no-rm-rf shared:mcp/demo shared:plugin/demoplug shared:marketplace/demo-market shared:tool/rtk $RS
+exists .agents/agents.lock
+exists AGENTS.md
+exec piste agents drift --ci $RS
+
+exec piste agents remove shared:skill/alpha shared:agent/rev shared:instruction/never shared:hook/guard shared:permission/no-rm-rf shared:mcp/demo shared:plugin/demoplug shared:marketplace/demo-market shared:tool/rtk $RS
+! exists .agents/agents.lock
+snaptree . ../after
+cmp ../before ../after
+
+-- proj/CLAUDE.md --
+# Hand-written project notes.
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

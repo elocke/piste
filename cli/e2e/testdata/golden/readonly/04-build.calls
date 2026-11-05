@@ -1,0 +1,2 @@
+nix eval --json $WORK/flake#homeConfigurations --apply builtins.attrNames --no-write-lock-file
+nix build $WORK/flake#homeConfigurations."tester@linux".activationPackage

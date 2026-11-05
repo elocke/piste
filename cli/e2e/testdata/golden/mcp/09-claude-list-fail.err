@@ -1,0 +1,2 @@
+pw: unpinned — npm package "@playwright/mcp" has no exact version (use @playwright/mcp@<version>)
+Error: claude mcp list failed (exit 3): boom

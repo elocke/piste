@@ -1,0 +1,76 @@
+# git/kubectl-style plugins: unknown `piste foo` runs piste-foo from
+# PATH, `piste secrets foo` runs piste-secrets-foo, and a plugin never shadows a
+# built-in.
+
+chmod 0755 bin/piste-pkgs
+chmod 0755 bin/piste-switch
+chmod 0755 bin/piste-secrets-rotate
+chmod 0755 bin/piste-secrets-init
+chmod 0755 bin/piste-flakedir
+env PATH=$WORK/bin${:}$PATH
+
+exec piste pkgs upgrade --all
+stdout '^plugin piste-pkgs: upgrade --all$'
+
+exec piste secrets rotate k1
+stdout '^plugin piste-secrets-rotate: k1$'
+
+# Built-ins win: `switch` and `secrets init` are Go built-ins, never
+# piste-switch / piste-secrets-init.
+exec piste switch --help
+! stdout SHADOWED
+stdout 'switch'
+exec piste secrets init --help
+! stdout SHADOWED
+stdout 'init'
+
+# An unknown command with no plugin is an error.
+! exec piste nosuchcmd status
+
+# A plugin gets the flake piste resolved as PISTE_FLAKE, unless PISTE_FLAKE
+# is already set.
+cd $WORK/ck/overlays/mine
+exec piste flakedir
+stdout '^PISTE_FLAKE=.*/ck/overlays/mine$'
+env PISTE_FLAKE=/given
+exec piste flakedir
+stdout '^PISTE_FLAKE=/given$'
+env PISTE_FLAKE=
+# A leading --overlay (either spelling) picks the overlay the plugin gets;
+# a bad one fails instead of running the plugin.
+cd $WORK/ck
+exec piste --overlay mine flakedir
+stdout '^PISTE_FLAKE=.*/ck/overlays/mine$'
+exec piste --overlay=mine flakedir
+stdout '^PISTE_FLAKE=.*/ck/overlays/mine$'
+! exec piste --overlay nope flakedir
+stderr 'no overlay nope in .*/ck/overlays'
+! stdout PISTE_FLAKE
+cd $WORK
+
+# Plugins are listed in help.
+exec piste --help
+stdout 'pkgs'
+
+-- bin/piste-pkgs --
+#!/bin/sh
+echo "plugin piste-pkgs: $*"
+-- bin/piste-switch --
+#!/bin/sh
+echo "SHADOWED"
+exit 9
+-- bin/piste-secrets-rotate --
+#!/bin/sh
+echo "plugin piste-secrets-rotate: $*"
+-- bin/piste-secrets-init --
+#!/bin/sh
+echo "SHADOWED"
+exit 9
+-- bin/piste-flakedir --
+#!/bin/sh
+echo "PISTE_FLAKE=$PISTE_FLAKE"
+-- ck/.piste --
+-- ck/flake.nix --
+{ }
+-- ck/overlays/mine/flake.nix --
+{ }

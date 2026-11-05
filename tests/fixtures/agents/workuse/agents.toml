@@ -1,0 +1,9 @@
+# A work zone opting into the shared catalog's "catalog" marketplace with a
+# plugin, without allowing its source: the marketplace is now this zone's,
+# so its policy refuses it.
+[policy]
+allow    = ["claude:market"]
+unlisted = "deny"
+
+[[claude.plugin]]
+id = "thing@catalog"

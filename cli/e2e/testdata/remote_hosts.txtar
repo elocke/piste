@@ -1,0 +1,20 @@
+# Remote hosts are config data ([remote.hosts] in ~/.config/piste/config.toml,
+# written by the zone overlays).
+
+mkdir $HOME/.config/piste
+cp config.toml $HOME/.config/piste/config.toml
+
+exec piste remote list
+stdout 'build'
+stdout 'build-ssh'
+stdout 'Build server'
+stdout 'bare'
+exec piste remote status build
+grep '^ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new build-ssh -- piste status$' $WORK/calls
+
+-- config.toml --
+[remote.hosts.build]
+ssh = "build-ssh"
+description = "Build server"
+
+[remote.hosts.bare]

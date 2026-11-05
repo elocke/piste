@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 'bad' names unknown harness "emacs"; expected one of ["chatgpt-desktop", "claude-code", "claude-desktop", "codex"]

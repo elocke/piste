@@ -1,0 +1,420 @@
+# piste host add: this machine joins an overlay made on another one. Its
+# host file and hosts entry are staged; with sops, its own age key goes into
+# .sops.yaml and the next steps say who re-encrypts. A refusal writes
+# nothing. HOME A is the first machine (its key made the overlay's secrets),
+# HOME B is this one.
+env USER=jane
+env OLDPATH=$PATH
+exec sh mkck.sh
+cd ck
+
+# The first machine's overlays, all for othermachine: mine with sops and a
+# secret only A can read; the others for the refusals.
+env HOME=$WORK/homeA
+exec piste init mine --no-build --sops --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec sh $WORK/mksecret.sh $WORK/homeA overlays/mine/secrets/env/api-keys.sops.yaml
+exec piste init old --no-build --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste init clash --no-build --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste init nohosts --no-build --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste init sopsbad --no-build --sops --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec sh $WORK/mkshapes.sh
+cp overlays/mine/flake.nix $WORK/mine-flake.before
+cp overlays/mine/.sops.yaml $WORK/mine-sops.before
+
+# This machine: its own HOME, the hosts eval answered from each flake.nix.
+env HOME=$WORK/homeB
+chmod 0755 $WORK/bin/nix
+env PATH=$WORK/bin${:}$OLDPATH
+
+# Five overlays at the root, none with this machine: which one is asked.
+! exec piste host add
+stderr '--overlay'
+
+# Refusals, each before any write.
+env USER=bob
+! exec piste host add --overlay mine
+stderr 'overlays/mine is jane''s'
+env USER=jane
+! exec piste host add --overlay mine --role container
+stderr 'container.*\(--role\)'
+env HOME=$WORK/homeD
+mkdir $WORK/homeD/.config/sops/age
+cp $WORK/garbage.txt $WORK/homeD/.config/sops/age/keys.txt
+! exec piste host add --overlay mine
+stderr 'can''t read the age key at .*/homeD/.config/sops/age/keys.txt'
+cmp $WORK/homeD/.config/sops/age/keys.txt $WORK/garbage.txt
+env HOME=$WORK/homeB
+# The hosts eval fails: nix's message, nothing written.
+env PATH=$OLDPATH
+env SHIM_EXIT_NIX_EVAL=1
+! exec piste host add --overlay mine
+stderr 'nix eval of its hosts failed'
+env SHIM_EXIT_NIX_EVAL=
+# The hosts never list this machine (the shared shim's one reply): the edit
+# is undone, the entry printed.
+cp $WORK/hosts-elsewhere.json $WORK/replies/nix-eval
+! exec piste host add --overlay mine
+stderr 'doesn''t list'
+[!darwin] stdout 'hosts."jane@testhost" = \{'
+[darwin] stdout 'hosts."testhost" = \{'
+! exists overlays/mine/hosts/testhost.nix
+env PATH=$WORK/bin${:}$OLDPATH
+exec git -C overlays/mine status --porcelain
+! stdout .
+cmp overlays/mine/flake.nix $WORK/mine-flake.before
+cmp overlays/mine/.sops.yaml $WORK/mine-sops.before
+! exists $WORK/homeB/.config/sops/age/keys.txt
+# The hosts eval fails once the entry is in (the first eval passed): the edit
+# is undone too.
+env EVAL_FAILS_ON=hosts/testhost.nix
+! exec piste host add --overlay mine
+stderr 'nix eval of overlays/mine doesn''t list (jane@)?testhost after adding its entry \(nix eval of its hosts failed'
+env EVAL_FAILS_ON=
+! exists overlays/mine/hosts/testhost.nix
+exec git -C overlays/mine status --porcelain
+! stdout .
+cmp overlays/mine/flake.nix $WORK/mine-flake.before
+cmp overlays/mine/.sops.yaml $WORK/mine-sops.before
+! exists $WORK/homeB/.config/sops/age/keys.txt
+
+# No home.nix: the entry and the host file printed, to add by hand.
+! exec piste host add --overlay old
+stderr 'overlays/old has no home.nix'
+stdout 'modules = \[ ./hosts/testhost.nix \];'
+stdout 'imports = \[ ../home.nix \];'
+! stdout 'Roles from'
+# A host file of that name already: refused.
+! exec piste host add --overlay clash
+stderr 'overlays/clash/hosts/testhost.nix exists'
+! stdout 'Roles from'
+# No hosts line in flake.nix: refused, the entry printed.
+! exec piste host add --overlay nohosts
+stderr 'no hosts line'
+stdout 'modules = \[ ./hosts/testhost.nix \];'
+! stdout 'Roles from'
+exec sh $WORK/clean.sh old clash nohosts
+! stdout .
+
+# Inside overlays/mine: added with the roles of the overlay's other host on
+# this platform, staged, the key made and in .sops.yaml, built, and the three
+# steps to finish.
+cd overlays/mine
+rm $WORK/calls
+exec piste host add
+[!darwin] stdout '^Roles from overlays/mine''s other Linux host \(jane@othermachine\): dev; --role sets others$'
+[darwin] stdout '^Roles from overlays/mine''s other Mac host \(othermachine\): none; --role sets others$'
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\) to overlays/mine: hosts/testhost.nix and its entry in flake.nix, staged'
+[!darwin] grep '^nix eval .*overlays/mine#\. --apply .*c\.config\.piste\.roles.*homeConfigurations' $WORK/calls
+[darwin] grep '^nix eval .*overlays/mine#\. --apply .*home-manager\.users\."jane"\.piste\.roles.*darwinConfigurations' $WORK/calls
+stdout 'Created age key: .*/homeB/.config/sops/age/keys.txt'
+stdout 'This machine''s key is in overlays/mine/.sops.yaml \(&testhost\), staged'
+stdout 'This machine can''t read overlays/mine''s secrets yet. To finish:'
+stdout '1\. here: +git -C .*/overlays/mine commit -m ''Add (jane@)?testhost'' -- flake.nix hosts/testhost.nix .sops.yaml && git -C .*/overlays/mine push'
+[!darwin] stdout '2\. on jane@othermachine, in its overlays/mine:'
+[darwin] stdout '2\. on othermachine, in its overlays/mine:'
+stdout 'git pull && piste secrets updatekeys && git commit -m ''Secrets for (jane@)?testhost'' -- ''\*.sops.yaml'' && git push'
+stdout '3\. here: +cd .*/ck && git -C overlays/mine pull && .*setup'
+! stdout 'can read the secrets'
+exists $WORK/homeB/.config/sops/age/keys.txt
+exec git diff --cached --name-only
+cmp stdout $WORK/staged.txt
+[!darwin] grep 'hosts."jane@testhost" = \{' flake.nix
+[darwin] grep 'hosts."testhost" = \{' flake.nix
+grep 'imports = \[ ../home.nix \];' hosts/testhost.nix
+grep '^  - &testhost age1' .sops.yaml
+grep '^          - \*testhost$' .sops.yaml
+[!darwin] grep '^nix build .*overlays/mine#homeConfigurations."jane@testhost".activationPackage' $WORK/calls
+[darwin] grep '^darwin-rebuild build --flake .*overlays/mine#testhost' $WORK/calls
+cp flake.nix $WORK/mine-flake.added
+cp .sops.yaml $WORK/mine-sops.added
+
+# Again: each step already done, nothing changed, the same steps to finish.
+rm $WORK/calls
+exec piste host add
+stdout 'overlays/mine already has (jane@)?testhost'
+! stdout 'Roles from'
+! grep 'piste\.roles' $WORK/calls
+stdout 'Age key already exists'
+stdout 'This machine''s key is already in overlays/mine/.sops.yaml'
+stdout 'To finish:'
+cmp flake.nix $WORK/mine-flake.added
+cmp .sops.yaml $WORK/mine-sops.added
+exec git diff --cached --name-only
+cmp stdout $WORK/staged.txt
+grep -count=1 'hosts."(jane@)?testhost" = \{' flake.nix
+grep -count=1 '&testhost' .sops.yaml
+# Committed, maybe not pushed: nothing staged, so step 1 is the push alone.
+exec git -c user.name=t -c user.email=t@t commit -q -m 'Add testhost'
+exec piste host add
+stdout '1\. here: +git -C .*/overlays/mine push +# if you haven''t$'
+! stdout 'commit -m ''Add'
+exec git reset -q --soft HEAD~1
+
+# Re-encrypted on the first machine (its metadata names this key now): ready.
+exec sh $WORK/mksecret.sh $WORK/homeB secrets/env/api-keys.sops.yaml
+exec piste host add
+stdout 'This machine can read the secrets'
+! stdout 'To finish'
+stdout 'git -C .*/overlays/mine commit -m ''Add (jane@)?testhost'' -- flake.nix hosts/testhost.nix .sops.yaml && git -C .*/overlays/mine push'
+# That commit takes host add's files only: another staged change stays out.
+cp stdout $WORK/keep.out
+exec sh $WORK/keep.sh
+cmp stdout $WORK/keep-want.txt
+cd $WORK/ck
+
+# A .sops.yaml piste doesn't edit (keys on the rule itself): refused with the
+# lines to add, the file as it was.
+cp overlays/sopsbad/.sops.yaml $WORK/sopsbad.before
+! exec piste host add --overlay sopsbad
+stderr 'overlays/sopsbad/.sops.yaml: a creation rule has no key_groups'
+stdout '- &testhost age1'
+stdout '- \*testhost'
+cmp overlays/sopsbad/.sops.yaml $WORK/sopsbad.before
+exec sh $WORK/clean.sh sopsbad
+! stdout .
+
+# This machine's key already in keys: (an overlay made with it): left alone.
+exec piste init pre --no-build --sops --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+cp overlays/pre/.sops.yaml $WORK/pre.before
+exec piste host add --overlay pre
+stdout 'This machine''s key is already in overlays/pre/.sops.yaml'
+stdout 'This machine can read the secrets'
+cmp overlays/pre/.sops.yaml $WORK/pre.before
+
+# No .sops.yaml: no key made, the commit-and-push line.
+env HOME=$WORK/homeC
+exec piste init plain --no-build --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay plain
+! exists $WORK/homeC/.config/sops/age/keys.txt
+! stdout 'secrets'
+stdout 'git -C .*/overlays/plain commit -m ''Add (jane@)?testhost'' -- flake.nix hosts/testhost.nix && git -C .*/overlays/plain push'
+# Secrets encrypted without a .sops.yaml (sops --age by hand, or the file
+# deleted): not ready, and said what's missing; still no key made.
+exec sh $WORK/mksecret.sh $WORK/homeA overlays/plain/secrets/env/api-keys.sops.yaml
+exec piste host add --overlay plain
+stdout 'overlays/plain already has (jane@)?testhost'
+stdout 'This machine can''t read overlays/plain''s secrets, and there''s no .sops.yaml to add its key to: on a machine that can read them, piste secrets init in overlays/plain makes one'
+! stdout 'can read the secrets'
+! exists $WORK/homeC/.config/sops/age/keys.txt
+
+# The overlay's other host on this platform takes the extras role (its first
+# machine started with everything): this one takes it too, and nothing more
+# is said; with --role ...,extras the same.
+exec piste init ex --no-build --extras --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay ex
+[!darwin] stdout '^Roles from overlays/ex''s other Linux host \(jane@othermachine\): dev, extras; --role sets others$'
+[darwin] stdout '^Roles from overlays/ex''s other Mac host \(othermachine\): extras; --role sets others$'
+stdout 'Added (jane@)?testhost \(roles: (dev, )?extras\)'
+! stdout 'take the extras role'
+grep -count=2 '"extras"' overlays/ex/flake.nix
+# Two hosts on this platform: the roles both have (desktop brings dev, which
+# the other has; extras only one has, so it's said how to add it).
+exec piste init mix --no-build --extras --role desktop --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec sh $WORK/addthird.sh overlays/mix
+exec piste host add --overlay mix
+[!darwin] stdout '^Roles from overlays/mix''s other Linux hosts \(jane@othermachine, jane@third\), the ones they share: dev; --role sets others$'
+[darwin] stdout '^Roles from overlays/mix''s other Mac hosts \(othermachine, third\), the ones they share: none; --role sets others$'
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\)'
+stdout 'The overlay''s other hosts take the extras role; (jane@)?testhost doesn''t: add "extras" to its roles in overlays/mix/flake.nix'
+# No other host on this platform (the overlay's one machine is the other
+# kind): the defaults, and the extras hint.
+[!darwin] exec piste init far --no-build --extras --system aarch64-darwin --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+[darwin] exec piste init far --no-build --extras --system x86_64-linux --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay far
+! stdout 'Roles from'
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\)'
+stdout 'The overlay''s other hosts take the extras role; (jane@)?testhost doesn''t: add "extras" to its roles in overlays/far/flake.nix'
+# The roles eval fails: the defaults, and said.
+exec piste init broken --no-build --extras --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+env ROLES_EVAL_FAILS=1
+exec piste host add --overlay broken
+env ROLES_EVAL_FAILS=
+stdout 'Couldn''t read the roles of overlays/broken''s other (Linux|Mac) host \(nix eval failed: error: example roles failure\): this machine takes the default ones \((dev|none)\); --role sets others'
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\)'
+exec piste init ex2 --no-build --extras --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay ex2 --role dev,extras
+! stdout 'take the extras role'
+stdout 'Added (jane@)?testhost \(roles: dev, extras\)'
+grep -count=2 '"extras"' overlays/ex2/flake.nix
+# --extras is init's spelling, and host add's too: the roles it would take
+# plus extras, or the given ones plus extras; --extras=false takes it out.
+exec piste init ex3 --no-build --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay ex3 --extras
+! stdout 'take the extras role'
+stdout 'Added (jane@)?testhost \(roles: (dev, )?extras\)'
+grep -count=1 '"extras"' overlays/ex3/flake.nix
+exec piste init ex5 --no-build --extras --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay ex5 --extras=false
+stdout 'Added (jane@)?testhost \(roles: (dev|none)\)'
+stdout 'piste host add --extras takes it'
+exec piste init ex4 --no-build --extras --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste host add --overlay ex4 --role base,extras --extras=false
+stdout 'Added (jane@)?testhost \(roles: base\)'
+stdout 'piste host add --extras takes it'
+# plain's hosts don't: nothing said.
+exec piste host add --overlay plain
+! stdout 'extras'
+
+# On the first machine: one sops updatekeys per encrypted secrets file, then
+# one sops rotate (a new data key: a removed machine had the old one), run in
+# the overlay (sops finds .sops.yaml there); a plaintext one is skipped (it has
+# no recipients, and sops fails on it); a failure names its file, and its
+# rotate isn't run.
+cd overlays/mine
+exec sh $WORK/mksecret.sh $WORK/homeB secrets/other.sops.yaml
+cp $WORK/skeleton.txt secrets/skeleton.sops.yaml
+rm $WORK/calls
+exec piste secrets updatekeys
+grep -count=2 '^sops updatekeys -y secrets/' $WORK/calls
+grep '^sops updatekeys -y secrets/env/api-keys.sops.yaml$' $WORK/calls
+grep '^sops updatekeys -y secrets/other.sops.yaml$' $WORK/calls
+grep -count=2 '^sops rotate -i secrets/' $WORK/calls
+grep '(?s)^sops updatekeys -y secrets/env/api-keys.sops.yaml\nsops rotate -i secrets/env/api-keys.sops.yaml\n' $WORK/calls
+stdout 'Skipped secrets/skeleton.sops.yaml: not encrypted yet'
+stdout 'Recipients unchanged: every file already had .sops.yaml''s. Each has a new data key now: commit and push the changes.'
+! stdout 'Re-encrypted'
+env SHIM_EXIT_SOPS_UPDATEKEYS=1
+rm $WORK/calls
+! exec piste secrets updatekeys
+stderr 'sops updatekeys failed on secrets/env/api-keys.sops.yaml'
+stderr 'sops updatekeys failed on secrets/other.sops.yaml'
+! stderr 'skeleton'
+! grep '^sops rotate' $WORK/calls
+env SHIM_EXIT_SOPS_UPDATEKEYS=
+env SHIM_EXIT_SOPS_ROTATE=1
+! exec piste secrets updatekeys
+stderr 'sops rotate failed on secrets/env/api-keys.sops.yaml'
+env SHIM_EXIT_SOPS_ROTATE=
+cd $WORK/ck
+# No .sops.yaml: nothing to re-encrypt for.
+! exec piste secrets updatekeys --overlay plain
+stderr 'no .sops.yaml'
+stderr 'piste secrets init'
+# A .sops.yaml and no secrets files, then only a plaintext one: nothing to
+# re-encrypt, exit 0, no sops run.
+cp $WORK/empty.txt $WORK/calls
+exec piste secrets updatekeys --overlay pre
+stdout 'No encrypted secrets files: nothing to re-encrypt'
+cp $WORK/skeleton.txt overlays/pre/secrets/env/api-keys.sops.yaml
+exec piste secrets updatekeys --overlay pre
+stdout 'Skipped secrets/env/api-keys.sops.yaml: not encrypted yet'
+stdout 'No encrypted secrets files: nothing to re-encrypt'
+! grep '^sops' $WORK/calls
+
+# Its help says how to remove a machine by hand, its GitHub key too, and lists the roles.
+exec piste host add --help
+stdout 'piste secrets updatekeys'
+stdout 'gh ssh-key delete'
+stdout 'base, dev, desktop or extras'
+
+-- staged.txt --
+.sops.yaml
+flake.nix
+hosts/testhost.nix
+-- hosts-elsewhere.json --
+{"darwin": ["othermachine"], "home": ["jane@othermachine"]}
+-- empty.txt --
+-- skeleton.txt --
+EXAMPLE_TOKEN: ""
+-- garbage.txt --
+not an age key
+-- bin/nix --
+#!/bin/sh
+# nix, answering the hosts eval and the roles eval from the flake's own
+# hosts."…" lines (each with its roles = [ … ]; line after it); the rest goes
+# to the shared shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+for a in "$@"; do case "$a" in *'#.') f="${a%#.}/flake.nix" ;; esac; done
+# EVAL_FAILS_ON=<text>: the eval fails while flake.nix has it.
+if [ -n "$EVAL_FAILS_ON" ] && grep -qF "$EVAL_FAILS_ON" "$f"; then echo "error: example eval failure" >&2; exit 1; fi
+case "$*" in
+*piste.roles*)
+  # ROLES_EVAL_FAILS=1: the roles eval fails.
+  if [ -n "$ROLES_EVAL_FAILS" ]; then echo "error: example roles failure" >&2; exit 1; fi
+  case "$*" in *darwinConfigurations*) kind=darwin ;; *) kind=home ;; esac
+  exec awk -v kind="$kind" '
+    /^ *hosts\."[^"]*" = \{/ { n = $0; sub(/^ *hosts\."/, "", n); sub(/".*/, "", n) }
+    /^ *roles = \[/ && n != "" {
+      r = $0; sub(/^ *roles = \[ */, "", r); sub(/ *\].*/, "", r); gsub(/" "/, "\", \"", r)
+      if ((kind == "home") == (index(n, "@") > 0)) { out = out sep "\"" n "\": [" r "]"; sep = ", " }
+      n = ""
+    }
+    END { print "{\"roles\": {" out "}}" }' "$f" ;;
+esac
+home=; darwin=
+for n in $(sed -n 's/^ *hosts\."\([^"]*\)" = {.*/\1/p' "$f"); do
+  case "$n" in *@*) home="$home, \"$n\"" ;; *) darwin="$darwin, \"$n\"" ;; esac
+done
+printf '{"darwin": [%s], "home": [%s]}\n' "${darwin#, }" "${home#, }"
+-- addthird.sh --
+# addthird.sh <overlay>: a second host on this platform, with the dev role
+# (beside othermachine's desktop and extras).
+set -e
+case "$(uname -s)" in Darwin) key=third; sys=aarch64-darwin ;; *) key=jane@third; sys=x86_64-linux ;; esac
+awk -v key="$key" -v sys="$sys" '
+  /^ *hosts\."/ && !done { print "      hosts.\"" key "\" = {"; print "        system = \"" sys "\";"; print "        roles = [ \"dev\" ];"; print "        modules = [ ./hosts/othermachine.nix ];"; print "      };"; done = 1 }
+  { print }' "$1/flake.nix" > "$1/flake.nix.new"
+mv "$1/flake.nix.new" "$1/flake.nix"
+-- mkck.sh --
+set -e
+mkdir -p replies homeA homeB homeC ck
+cd ck
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+-- mksecret.sh --
+# mksecret.sh <home> <file>: a secrets file sops encrypted for <home>'s key
+# (its metadata, as sops writes it; the shim can't encrypt).
+set -e
+pub=$(sed -n 's/^# public key: //p' "$1/.config/sops/age/keys.txt")
+mkdir -p "$(dirname "$2")"
+printf 'token: ENC[AES256_GCM,data:eA==,type:str]\nsops:\n    age:\n        - recipient: %s\n          enc: x\n    version: 3.13.3\n' "$pub" > "$2"
+-- mkshapes.sh --
+# The refusals' overlays, then every overlay committed.
+set -e
+cd overlays
+commit() { for o in mine old clash nohosts sopsbad; do git -C "$o" add -A && git -C "$o" -c user.name=t -c user.email=t@t commit -q --allow-empty -m "$1"; done; }
+commit init
+git -C old rm -q home.nix
+cp clash/hosts/othermachine.nix clash/hosts/testhost.nix
+cat > nohosts/flake.nix <<'EOF'
+{
+  outputs =
+    inputs@{ self, piste, ... }:
+    let
+      machines = import ./machines.nix;
+    in
+    piste.lib.mkFlake {
+      inherit inputs self;
+      user = "jane";
+      zone = "personal";
+      inherit (machines) hosts;
+    };
+}
+EOF
+pub=$(sed -n 's/^  - &user //p' sopsbad/.sops.yaml)
+printf 'keys:\n  - &user %s\n# keys on the rule itself\ncreation_rules:\n  - path_regex: secrets/.*\\.sops\\.yaml$\n    age: %s\n' "$pub" "$pub" > sopsbad/.sops.yaml
+commit shapes
+-- clean.sh --
+# clean.sh <overlay>...: git status of each, empty when nothing was written.
+for o in "$@"; do git -C "overlays/$o" status --porcelain; done
+-- keep.sh --
+# Runs host add's "To keep it" commit (not the push) with another change
+# staged, then shows what the commit took and what is still staged; undone.
+set -e
+cmd=$(sed -n 's/^  To keep it: \(.*\) && git -C .* push$/\1/p' "$WORK/keep.out")
+[ -n "$cmd" ]
+echo note > other.txt && git add other.txt
+# Exported, not prefixed: dash (sh on Ubuntu) doesn't pass assignments in front
+# of eval on to the commands it runs, so the commit had no identity in CI.
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+eval "$cmd" >/dev/null
+echo committed: $(git show --name-only --format= HEAD | sort)
+echo staged: $(git diff --cached --name-only)
+git reset -q --soft HEAD~1 && git rm -q --cached other.txt && rm other.txt
+-- keep-want.txt --
+committed: .sops.yaml flake.nix hosts/testhost.nix
+staged: other.txt

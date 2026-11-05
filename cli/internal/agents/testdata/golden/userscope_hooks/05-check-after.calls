@@ -1,0 +1,9 @@
+plugin list --json
+plugin list --json
+plugin marketplace list --json
+plugin list --json
+plugin marketplace list --json
+plugin list --json
+plugin marketplace add $WORK/market
+plugin install piste-harness@piste-local --scope user
+plugin list --json

@@ -1,0 +1,77 @@
+# `piste mcp sync|check` resolve the fallback manifest from this host's zone
+# (the piste.agents user-scope manifest), never another zone's overlay; a
+# zone without [[mcp]] is a clean no-op, exit 0. With no manifest and no
+# piste checkout to resolve an overlay from, it is an error: a work machine
+# is not guessed from directory names. Exit codes, output and harness calls
+# are frozen in $GOLDEN/mcp_zone.
+
+chmod 0755 scenario.sh
+chmod 0755 fakebin/claude
+chmod 0755 fakebin/codex
+env USER=tester
+
+exec sh scenario.sh
+# not vacuous: the work host is a no-op and calls no harness CLI; the
+# personal host reads its own overlay
+grep 'no MCP servers declared for this zone \(work\)' out/work-sync.out
+grep '^0$' out/work-sync.rc
+grep '^0$' out/work-prune.rc
+grep '^0$' out/work-check.rc
+! grep . out/work-sync.calls
+! grep . out/work-check.calls
+grep 'personal/agents/agents.toml' out/personal-check.out
+grep '^1$' out/nomanifest-work.rc
+cmpworkdir $WORK/out $GOLDEN/mcp_zone
+
+-- fakebin/claude --
+#!/bin/sh
+echo "claude $*" >> "$WORK/calls"
+exit 0
+-- fakebin/codex --
+#!/bin/sh
+echo "codex $*" >> "$WORK/calls"
+[ "$1 $2 $3" = "mcp list --json" ] && echo "[]"
+exit 0
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out"
+H=$WORK/h
+export HOME=$H PATH=$WORK/fakebin:$PATH COLUMNS=500
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+setup() { # zone
+  rm -rf "$H"; mkdir -p "$H/src/personal/agents" "$H/src/work/agents" "$H/.config/piste-agents" "$H/.codex"
+  cp "$WORK/personal.toml" "$H/src/personal/agents/agents.toml"
+  cp "$WORK/work.toml" "$H/src/work/agents/agents.toml"
+  sed "s#@H@#$H#g; s#@Z@#$1#g" "$WORK/manifest.json" > "$H/.config/piste-agents/manifest.json"
+  cd "$H"
+}
+setup work
+run work-sync mcp sync
+run work-prune mcp sync --prune
+run work-check mcp check
+setup personal
+run personal-check mcp check
+setup work
+rm "$H/.config/piste-agents/manifest.json"
+run nomanifest-work mcp check
+exit 0
+-- personal.toml --
+[[mcp]]
+name = "pw"
+transport = "stdio"
+command = "pw-mcp"
+harnesses = ["codex"]
+-- work.toml --
+[policy]
+unlisted = "deny"
+-- manifest.json --
+{"zone": "@Z@", "sources": [
+  {"name": "piste-agents", "zone": "shared", "workdir": "@H@/piste/agents"},
+  {"name": "@Z@-agents", "zone": "@Z@", "workdir": "@H@/src/@Z@/agents"}
+]}

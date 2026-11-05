@@ -1,0 +1,4 @@
+nix search nixpkgs#jq --json
+nix eval nixpkgs#jq.name
+brew search jq
+brew search --casks jq

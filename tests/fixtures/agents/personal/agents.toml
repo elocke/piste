@@ -1,0 +1,4 @@
+[[skill]]
+name = "thirdp2"
+source = "github:example/thirdp2"
+path = "."

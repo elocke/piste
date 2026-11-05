@@ -1,0 +1,41 @@
+# Changelog
+
+What each piste release changed, newest first. `piste update` shows you the
+notes between your release and the newest one. What a release promises to keep
+working, and what it doesn't, is in
+[docs/upgrading.md](docs/upgrading.md#what-a-release-promises).
+
+Every pull request that changes what a person sees adds one line under
+`## Unreleased`. A breaking change also adds a line under `### Upgrading`,
+saying what an overlay must change. Breaking means that an overlay which built
+on the last release fails to build, or that a machine changes without its
+overlay asking for it. Before 1.0, a breaking change is a minor release.
+
+Releases are cut from this file. A `flake.lock` update becomes a patch release
+by itself, and a patch carries any change merged without an Upgrading note. A
+minor or a major release is a pull request whose only change is
+`go run ./cmd/changelog cut minor` (or `major`), run from `cli/`, and whose
+branch is up to date with `main` when it merges: a cut that brings other
+changes in with it isn't released.
+
+## Unreleased
+
+## v0.1.0 (2026-11-05)
+- First public release. piste sets up Macs and Linux machines from one Nix configuration, and its `piste` command keeps them that way. Start with the [README](https://github.com/elocke/piste#readme).
+- Start with `nix run github:elocke/piste/stable -- setup`. `stable` is a branch that follows the newest release. `piste setup` checks what piste needs (Nix with flakes, git, and on a Mac the Xcode command-line tools), clones piste at its newest release, creates your overlay or adds one you already have, builds this machine, says what the switch will change, and offers the first switch. Releases attach no binaries; the source tag is the release.
+- Your own setup (your user, your machines, your packages, your secrets) lives in an overlay: a small git repo of your own, inside the piste checkout. Its `flake.nix` calls `piste.lib.mkFlake`, which wires your hosts. A Mac (Apple silicon) is a nix-darwin system with Homebrew managed by nix-homebrew; a Linux machine is a standalone home-manager configuration. NixOS isn't a target.
+- The engine is lean by default: zsh with a starship prompt, git with delta, vim, tmux, gh, a package set of command-line and dev tools, and on a Mac Ghostty (the only Homebrew cask), Alacritty, zellij, fonts, Touch ID for sudo and a few macOS settings. Every default can be turned off (`piste.roles.<role>.<part>.enable = false;`, `piste.packages.exclude`) and every macOS setting is a default your plain value wins over. [docs/customising.md](https://github.com/elocke/piste/blob/main/docs/customising.md) shows how.
+- The extras pack is the rest, opt-in: the `extras` role adds more aliases, tmux and Ghostty settings, git's editor and ignores, and on a Mac more apps (Firefox, Chrome, VS Code, Docker Desktop, Raycast and others) and a few input settings. `piste init` asks "Start minimal or with everything?" (`--extras` in a script). One toggle drops a part: `piste.roles.extras.<part>.enable = false;`. Nothing in it throws work away or writes the screen to disk: no `git nuke` or `git discard`, no `fetch.pruneTags`, and tmux's resurrect saves the layout without the panes' text (`piste.roles.extras.tmux.resurrectExtraConfig` turns that on).
+- Commands: `setup`, `init`, `add` and `host add` (a second machine), `build`, `check`, `dry`, `gendiff`, `switch` and `rollback`, `update`, `where`, `status`, `log` and `clean`. `piste switch` checks that a new login shell starts and runs piste, and puts the previous generation back when it can't. A file of yours in the way of a link is moved aside as `<file>.backup-<epoch>`. After a switch, one line says when a newer release is out (one check a day at most).
+- `piste update` moves your checkout and every overlay's engine pin to the newest release and shows each release's notes on the way. A note under Upgrading is a change you must act on.
+- `piste adopt` and `piste drift` find what you installed outside Nix (Homebrew, npm and pnpm globals, cargo, pip) and show where each would go; `adopt` writes the ones you tick into your overlay.
+- `piste fix` rebuilds after a failed build or switch, keeps the error, and starts Claude Code (else Codex) at the checkout with it. `PISTE_AI=none` turns that off. The checkout's skills `piste-fix` and `piste-config`, and `piste claude`, help an agent change your overlay. A committed `.claude/settings.json` stops an agent started at the checkout from switching, updating or pushing.
+- Secrets with sops and age: encrypted in your overlay, decrypted on the machine when it switches, exported to your shell. `piste secrets` makes the key and edits the files; `piste secrets updatekeys` re-encrypts them for a new machine.
+- `piste github` gives this machine its own GitHub SSH key, for pushing and for signing commits, uploaded with `gh`. Commits are signed by default only when there is a key to sign with. It finds this machine's host file through the overlay's hosts (a host named differently from the hostname works).
+- Agents: `piste.agents` deploys skills, instructions and hooks to Claude Code and Codex from the engine and from your overlay, and `piste agents` and `piste mcp` pin and reconcile third-party plugins, skills and MCP servers. The `base` preset is lean; `guard` (blocks destructive commands and commits that leak a secret) and `rtk` (the rtk token saver) are presets you choose. Content is kept apart by trust zone, and the build refuses agent content from another zone. A zone's policy can also refuse sources you haven't listed. [docs/agents-and-mcp.md](https://github.com/elocke/piste/blob/main/docs/agents-and-mcp.md) says what is and isn't checked.
+- `piste leaks` checks the commits a push would add, or an exported tree, for your leak-marker words, private (RFC1918) addresses, your home directory and secrets (via gitleaks, which ships with piste). The `.githooks/pre-push` hook runs it and blocks the push on a hit once a clone turns it on (`git config core.hooksPath .githooks`) and has a marker list.
+- Team layers (preview): a team shares a flake of modules, agent content and the names of the secrets it expects, and `piste init --layer <url>` starts an overlay on it. Layers are outside what a release promises and may change in a minor release.
+- What a release promises: the options, `mkFlake`'s arguments, the commands and the files piste reads. [docs/upgrading.md](https://github.com/elocke/piste/blob/main/docs/upgrading.md#what-a-release-promises) lists it, and what isn't promised.
+- `piste host add` (and `piste setup` when it adds a second machine) gives the new machine the roles of the overlay's other hosts of its kind (Mac or Linux), so `extras` carries over: it prints `Roles from overlays/<name>'s other Linux host (<host>): dev, extras; --role sets others`. Hosts that differ give the roles they all have; with no other host of its kind, the default roles. `--role` and `--extras` still choose.
+- `piste agents check` tolerates the Codex app's own plugins (its `openai-bundled` and `openai-primary-runtime` marketplaces: browser, computer-use, documents, pdf, spreadsheets and the rest) in every zone, and `piste agents sync --user --prune` leaves them.
+- Also: container images built from the same modules (`piste.lib.mkDevcontainer`), docs for strangers (README, concepts, customising, upgrading, and generated references for every command and every option), SECURITY.md for reporting a vulnerability privately, and the BSD-3-Clause licence. piste is provided as is, with no support.

@@ -1,0 +1,49 @@
+# Per-harness artifact support. A missing [harness.kind] table means the
+# harness does not support that kind; routing an artifact there is an error,
+# not a silent no-op.
+#
+# Paths are $HOME-relative. {name} is substituted with the artifact name.
+# Verified empirically against each harness.
+
+[claude.skills]
+path = ".claude/skills/{name}"
+type = "dir"
+
+[claude.agents]
+path = ".claude/agents/{name}.md"
+type = "file"
+
+[claude.commands]
+path = ".claude/commands/{name}.md"
+type = "file"
+
+[claude.instructions]
+path = ".claude/CLAUDE.md"
+type = "composed"
+
+# Codex reads both ~/.agents/skills and ~/.codex/skills. piste uses .agents
+# because it is the documented user-scope path and the shared convention.
+[codex.skills]
+path = ".agents/skills/{name}"
+type = "dir"
+
+[codex.instructions]
+path = ".codex/AGENTS.md"
+type = "composed"
+# Codex does not resolve `@file` imports: inline them from
+# instructions/include/codex/<file> (or include/<file>) at build time.
+inline_imports = true
+
+# Deliberately absent: codex.agents, codex.commands.
+# Codex uses features.child_agents_md / CODEX.md, a different mechanism.
+
+# Hooks (agents/hooks.toml). Claude: a generated local plugin (the carrier),
+# so settings.json is never edited. Codex: owned entries in
+# ~/.codex/hooks.json next to the foreign ones, trusted by hash.
+[claude.hooks]
+carrier = "plugin"
+plugin = "piste-harness"
+marketplace = "piste-local"
+
+[codex.hooks]
+path = ".codex/hooks.json"

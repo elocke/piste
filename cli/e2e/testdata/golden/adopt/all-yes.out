@@ -1,0 +1,18 @@
+Scanning for installs outside Nix...
+Reading what jane@testhost declares...
+Left as they are:
+  cargo  my-tool   no nixpkgs package by that name
+  pip    requests  no nixpkgs package by that name
+Adopt into overlays/jane (jane@testhost):
+  prettier     npm → pnpm globals? [Y/n]:   tsx          pnpm → pnpm globals? [Y/n]:   ripgrep-all  cargo → nixpkgs ripgrep-all 0.10.9? [Y/n]:   httpie       pip → nixpkgs httpie 3.2.4? [Y/n]: Added to overlays/jane/modules/js.nix:
+  pnpmPackages prettier tsx
+Added to overlays/jane/hosts/testhost.nix:
+  home.packages ripgrep-all httpie
+Switch now? Nix then provides them. [Y/n]: Flake: $WORK/ck/overlays/jane
+engine override: $WORK/ck (the checkout around the overlay)
+Building and switching...
+Switch complete!
+  npm rm -g prettier typescript
+  cargo uninstall ripgrep-all
+  pip uninstall --yes httpie black
+Remove 5 copies outside Nix? Nix provides them now. [Y/n]: 

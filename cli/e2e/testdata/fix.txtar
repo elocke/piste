@@ -1,0 +1,151 @@
+# piste fix: rebuild what `piste switch` builds (the checkout override,
+# --show-trace), never activating; report nix's error line and the log. With
+# no terminal (testscript has none) it never starts claude or codex.
+env USER=jane
+exec sh mk.sh
+cd piste/overlays/o
+cp $WORK/eval.json $WORK/replies/nix-eval
+env LOG=$WORK/home/.local/state/piste/fix.log
+
+# A failed build: the error line, the log, the switch's build, no AI.
+cp $WORK/error.txt $WORK/replies/nix-build
+cp $WORK/error.txt $WORK/replies/darwin-rebuild-build
+env SHIM_EXIT_NIX_BUILD=1
+env SHIM_EXIT_DARWIN_REBUILD_BUILD=1
+! exec piste fix
+# Where is the definition's file, not the frame in nixpkgs before the
+# error (error.txt is nix's own output, cut to its last frames).
+stderr '^error: The option .piste\.pakages. does not exist\. Definition values: / in hosts/devbox\.nix / Did you mean .piste\.agents., .piste\.roles. or .piste\.programs.\?$'
+! stderr 'lib/modules\.nix:376:13$'
+stdout '^Rebuilding (jane@testhost|testhost) as piste switch would, without activating\.\.\.$'
+stdout '^Full log: \S+/home/\.local/state/piste/fix\.log$'
+! stdout 'Starting'
+grep '^# piste fix: ' $LOG
+grep '^# ran: piste fix$' $LOG
+grep '^# build: (nix build|darwin-rebuild build) ' $LOG
+grep 'The option .piste\.pakages. does not exist' $LOG
+[linux] grep '^nix build \S+/piste/overlays/o#homeConfigurations\."jane@testhost"\.activationPackage --override-input piste git\+file://\S+/piste --show-trace$' $WORK/calls
+[darwin] grep '^darwin-rebuild build --flake \S+/piste/overlays/o --override-input piste git\+file://\S+/piste --show-trace$' $WORK/calls
+! grep '^(claude|codex)' $WORK/calls
+! grep 'switch' $WORK/calls
+
+# --verbose already adds --show-trace: once.
+rm $WORK/calls
+! exec piste -v fix
+grep 'show-trace' $WORK/calls
+! grep 'show-trace.*show-trace' $WORK/calls
+grep '^# ran: piste -v fix$' $LOG
+
+# A failure that prints nothing: the exit code.
+rm $WORK/replies/nix-build $WORK/replies/darwin-rebuild-build
+! exec piste fix
+stderr '^Build failed \(exit code 1\)$'
+
+# No AI: why, and where the common errors are.
+cp $WORK/error.txt $WORK/replies/nix-build
+cp $WORK/error.txt $WORK/replies/darwin-rebuild-build
+env PISTE_AI=gemini
+! exec piste fix
+stdout '^PISTE_AI=gemini: piste fix starts claude or codex, or none for no AI\. Common errors: \S+/piste/\.agents/skills/piste-fix/SKILL\.md$'
+
+# PISTE_AI=none: nothing about AI.
+env PISTE_AI=none
+! exec piste fix
+! stdout 'PISTE_AI'
+! stdout 'Claude'
+env PISTE_AI=
+
+# A passing build: it says so and exits 0, still no AI.
+env SHIM_EXIT_NIX_BUILD=
+env SHIM_EXIT_DARWIN_REBUILD_BUILD=
+rm $WORK/calls
+exec piste fix
+stdout '(jane@testhost|testhost) builds, so the failure was in activation, or it.s gone\.$'
+! grep '^(claude|codex)' $WORK/calls
+
+# A failed build names piste fix, with the flags it had; PISTE_AI=none
+# turns the line off, PISTE_AI=codex names Codex.
+env SHIM_EXIT_NIX_BUILD=1
+env SHIM_EXIT_DARWIN_REBUILD_BUILD=1
+! exec piste build
+stdout '^To have Claude Code fix it: piste fix$'
+! exec piste --overlay o build --host hh
+stdout '^To have Claude Code fix it: piste fix --overlay o --host hh$'
+env PISTE_AI=none
+! exec piste build
+! stdout 'fix it'
+env PISTE_AI=codex
+! exec piste build
+stdout '^To have Codex fix it: piste fix$'
+env PISTE_AI=
+
+# A failed switch names it too.
+env SHIM_EXIT_HOME_MANAGER=1
+env SHIM_EXIT_SUDO=1
+! exec piste switch --host hh
+stdout '^To have Claude Code fix it: piste fix --host hh$'
+
+# No checkout: piste fix has nowhere to start an AI. A failed build names
+# no piste fix; piste fix says why no session starts; the no-AI line has
+# no skill path to give.
+cd $WORK/solo
+env SHIM_EXIT_NIX_BUILD=1
+env SHIM_EXIT_DARWIN_REBUILD_BUILD=1
+! exec piste build
+! stdout 'fix it'
+! exec piste fix
+stdout '^piste fix starts Claude Code at a piste checkout, and found none: run it inside one, or clone one to ~/piste$'
+! stdout 'Starting'
+env PISTE_AI=gemini
+! exec piste fix
+stdout '^PISTE_AI=gemini: piste fix starts claude or codex, or none for no AI$'
+! stdout 'Common errors'
+! stdout 'found none'
+
+-- eval.json --
+["jane@testhost"]
+-- error.txt --
+warning: Git tree '/home/user/piste/overlays/mine' has uncommitted changes
+error:
+       … while evaluating the attribute 'config'
+         at «github:nixos/nixpkgs/31ecbac»/lib/modules.nix:404:9:
+          403|         options = checked options;
+          404|         config = checked (removeAttrs config [ "_module" ]);
+             |         ^
+          405|         _module = checked (config._module);
+
+       … while calling the 'seq' builtin
+         at «github:nixos/nixpkgs/31ecbac»/lib/modules.nix:404:18:
+          403|         options = checked options;
+          404|         config = checked (removeAttrs config [ "_module" ]);
+             |                  ^
+          405|         _module = checked (config._module);
+
+       … while calling the 'throw' builtin
+         at «github:nixos/nixpkgs/31ecbac»/lib/modules.nix:376:13:
+          375|           else
+          376|             throw baseMsg
+             |             ^
+          377|         else
+
+       error: The option `piste.pakages' does not exist. Definition values:
+       - In `/nix/store/rf1bn2jv3w2mib999yn2anfw8n62xvr1-source/hosts/devbox.nix':
+           {
+             extraPackages = [ ];
+           }
+
+       Did you mean `piste.agents', `piste.roles' or `piste.programs'?
+-- mk.sh --
+set -e
+mkdir -p replies piste/overlays/o solo
+cd piste
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+git init -q -b main
+cd overlays/o
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf '%s\n' '{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs", "piste": "piste"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}, "piste": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}' > flake.lock
+cd $WORK/solo
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf '%s\n' '{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}' > flake.lock

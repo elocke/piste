@@ -1,0 +1,11 @@
+git ls-remote https://github.com/evil/x.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/evil/x.git"; rev = "7777777777777777777777777777777777777777"; hash = pkgs.lib.fakeHash;  }
+git ls-remote https://github.com/o/skills.git refs/tags/v1.2* refs/heads/v1.2
+git ls-remote https://github.com/o/skills.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/o/skills.git"; rev = "6666666666666666666666666666666666666666"; hash = pkgs.lib.fakeHash; sparseCheckout = [ "skills/moved" ]; }
+git ls-remote https://github.com/o/skills.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/o/skills.git"; rev = "6666666666666666666666666666666666666666"; hash = pkgs.lib.fakeHash; sparseCheckout = [ "skills/unlocked" ]; }
+claude plugin marketplace list --json
+git ls-remote https://github.com/o/new.git HEAD
+git ls-remote https://github.com/o/cfg.git refs/tags/main* refs/heads/main
+claude plugin list --json

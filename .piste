@@ -1,0 +1,2 @@
+# The root of a piste checkout: piste finds it by this file.
+# Overlays live in overlays/<name>/ (not tracked here).

@@ -1,0 +1,1 @@
+nh clean user --keep-since 30d --keep 5

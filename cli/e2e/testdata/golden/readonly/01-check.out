@@ -1,0 +1,4 @@
+Flake: $WORK/flake
+engine override: none (flake has no piste input)
+Checking flake...
+["tester@other", "tester@box"]Flake check passed.

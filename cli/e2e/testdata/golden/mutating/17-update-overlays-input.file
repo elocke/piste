@@ -1,0 +1,11 @@
+# @overlay-update github:o/tool
+final: prev: {
+  tool = prev.stdenv.mkDerivation rec {
+    pname = "tool";
+    version = "2.0.0";
+    src = prev.fetchurl {
+      asset = "tool-1.0.0-linux.tar.gz";
+      hash = "0abc123hash";
+    };
+  };
+}

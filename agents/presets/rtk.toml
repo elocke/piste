@@ -1,0 +1,10 @@
+# rtk, the token-saving CLI proxy: the rtk-rewrite hook plus the instruction
+# that tells the agent to use it. Opt-in: rtk is an unfree prebuilt binary, so
+# the module puts it on PATH only for a host that selects this preset (the hook
+# and the instruction are useless without it). Needs `piste agents sync --user` after
+# the switch to install the Claude carrier and trust the Codex entry. Claude's
+# copy of the instruction imports ~/.claude/RTK.md, which `rtk init -g` writes.
+targets = ["claude", "codex"]
+
+instructions = ["rtk"]
+hooks = ["rtk-rewrite"]

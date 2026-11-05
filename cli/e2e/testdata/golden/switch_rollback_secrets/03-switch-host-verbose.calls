@@ -1,0 +1,1 @@
+home-manager switch -b backup-N --flake $WORK/flake#tester@b --show-trace

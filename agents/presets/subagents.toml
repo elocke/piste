@@ -1,0 +1,18 @@
+# Shared subagents: generic Claude Code custom agents (~/.claude/agents/<name>.md)
+# that fit any repo, so every zone can take them. Zone-specific agents live in
+# that zone's own preset, in its overlay.
+#
+# Claude only: Codex has no subagent capability (capabilities.toml), so this
+# can't share `base`'s targets. Hosts opt in by adding "subagents" to presets.
+#
+# - adversarial-reviewer: opus + high effort. No edit tools (disallowedTools)
+#   and a Bash hook that blocks common write forms; Bash stays open for tests
+#   and greps, so "read-only" is an accident guard, not a sandbox.
+# - implementer: writes in a given worktree, sonnet; its Bash hook blocks
+#   push/PR actions/deploys/switches (an accident guard, not a boundary).
+targets = ["claude"]
+
+agents = [
+  "adversarial-reviewer",
+  "implementer",
+]

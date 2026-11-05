@@ -1,0 +1,12 @@
+{
+  "enabledPlugins": {
+    "heavy@market": false,
+    "tool@market": true
+  },
+  "skillOverrides": {
+    "beta": "off",
+    "synced-extra": "off",
+    "thirdp": "off",
+    "thirdp2": "off"
+  }
+}

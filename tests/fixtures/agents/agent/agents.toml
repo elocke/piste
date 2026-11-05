@@ -1,0 +1,10 @@
+# The `agent` fixture zone denies every unlisted third-party item, so the
+# zone checks also exercise zone-unapproved-rejected.
+[policy]
+# The marketplaces the shared catalog's base preset uses (as in the work
+# zone's policy).
+allow = [
+  "github:anthropics/claude-plugins-official",
+  "github:astral-sh/claude-code-plugins",
+]
+unlisted = "deny"

@@ -1,0 +1,129 @@
+# Flake discovery and the engine override in a piste checkout (`piste where`):
+# the checkout root means its overlay, an overlay builds against
+# the checkout around it, a worktree of an overlay against its main repo's
+# checkout; a submodule (.git FILE pointing into modules/) is still skipped;
+# fallbacks say so.
+
+# The checkout root with one overlay: that overlay, against the checkout.
+cd $WORK/home/src/piste
+exec piste where
+stdout '^flake: .*/home/src/piste/overlays/personal \(checkout .*/home/src/piste: overlay personal \(the only overlay\)\)$'
+stdout '^engine override: .*/home/src/piste \(the checkout around the overlay\)$'
+
+# --overlay names an overlay; a missing one is an error naming the others.
+! exec piste --overlay nope where
+stderr 'no overlay nope in .*/home/src/piste/overlays \(have: personal\)'
+
+# Inside the overlay: the cwd.
+cd $WORK/home/src/piste/overlays/personal
+exec piste where
+stdout '^flake: .*/home/src/piste/overlays/personal \(cwd\)$'
+stdout '^engine override: .*/home/src/piste \(the checkout around the overlay\)$'
+
+# A worktree of the overlay outside the checkout, from a subdirectory: the
+# flake is the worktree, the engine the checkout of its main repo.
+cd $WORK/wt/fix/sub
+exec piste where
+stdout '^flake: .*/wt/fix \(cwd\)$'
+stdout '^engine override: .*/home/src/piste \(FALLBACK: worktree of .*/home/src/piste/overlays/personal, in checkout .*/home/src/piste; set PISTE_ENGINE to change\)$'
+
+# A submodule inside the worktree is skipped: still the worktree.
+cd $WORK/wt/fix/sub/piste
+exec piste where
+stdout '^flake: .*/wt/fix \(cwd\)$'
+
+# PISTE_ENGINE picks the override, or turns it off.
+cd $WORK/wt/fix
+env PISTE_ENGINE=$WORK/other
+exec piste where
+stdout '^engine override: .*/other \(\$PISTE_ENGINE\)$'
+env PISTE_ENGINE=none
+exec piste where
+stdout '^engine override: none \(PISTE_ENGINE=none: locked input\)$'
+env PISTE_ENGINE=$WORK/nope
+! exec piste where
+# none is the one word for the locked input: off is a path.
+env PISTE_ENGINE=off
+! exec piste where
+stderr 'PISTE_ENGINE=off: no flake.nix in'
+env PISTE_ENGINE=
+
+# A checkout with no overlays (a fresh clone, an engine worktree) is the
+# engine, which has no piste input; piste says where overlays go.
+cd $WORK/bare
+exec piste where
+stdout '^flake: .*/bare \(checkout .*/bare: the engine \(no overlays\)\)$'
+stdout '^engine override: none \(flake has no piste input\)$'
+stdout 'no overlay in .*/bare/overlays: clone your overlay repo there'
+
+# At a root with two overlays whose hosts can't be evaluated (an overlay
+# being edited), nix's own error leads, not "no overlay has this host".
+chmod 0755 $WORK/fakebin/nix
+cd $WORK/two
+env OLDPATH=$PATH
+env PATH=$WORK/fakebin${:}$PATH
+! exec piste where
+stderr '^could not evaluate overlay a: .*error: syntax error, unexpected .\}. at .*/two/overlays/a/flake.nix:3:1'
+stderr 'no other overlay in .*/two/overlays has this host'
+env PATH=$OLDPATH
+
+# Outside any checkout: the checkout the agents manifest records.
+exec sh -c 'mkdir -p "$HOME/.config/piste-agents" && printf "{\"sources\":[{\"name\":\"piste-agents\",\"workdir\":\"%s/agents\"}]}" "$WORK/home/src/piste" > "$HOME/.config/piste-agents/manifest.json"'
+cd $WORK/outside
+exec piste where
+stdout '^flake: .*/home/src/piste/overlays/personal \(FALLBACK: checkout .*/home/src/piste from the agents manifest: overlay personal \(the only overlay\)\)$'
+
+# With no manifest and no ~/piste either, there is no flake: a flake
+# elsewhere under the home is not guessed.
+rm $HOME/.config/piste-agents/manifest.json
+! exec piste where
+stderr 'no flake here: run piste inside a piste checkout or overlay, or set PISTE_FLAKE'
+
+-- home/src/piste/.piste --
+-- home/src/piste/flake.nix --
+{ }
+-- home/src/piste/flake.lock --
+{"nodes":{"root":{"inputs":{"nixpkgs":"nixpkgs"}}},"root":"root","version":7}
+-- home/src/piste/.git/HEAD --
+ref: refs/heads/main
+-- home/src/piste/overlays/personal/flake.nix --
+{ }
+-- home/src/piste/overlays/personal/flake.lock --
+{"nodes":{"root":{"inputs":{"piste":"piste"}}},"root":"root","version":7}
+-- home/src/piste/overlays/personal/.git/HEAD --
+ref: refs/heads/main
+-- home/src/piste/overlays/personal/.git/worktrees/wt1/commondir --
+../..
+-- home/src/piste/overlays/personal/.git/worktrees/wt1/modules/piste/HEAD --
+0000000000000000000000000000000000000000
+-- wt/fix/.git --
+gitdir: ../../home/src/piste/overlays/personal/.git/worktrees/wt1
+-- wt/fix/flake.nix --
+{ }
+-- wt/fix/flake.lock --
+{"nodes":{"root":{"inputs":{"piste":"piste"}}},"root":"root","version":7}
+-- wt/fix/sub/.keep --
+-- wt/fix/sub/piste/flake.nix --
+{ }
+-- wt/fix/sub/piste/.git --
+gitdir: ../../../../home/src/piste/overlays/personal/.git/worktrees/wt1/modules/piste
+-- other/flake.nix --
+{ }
+-- bare/.piste --
+-- bare/flake.nix --
+{ }
+-- bare/flake.lock --
+{"nodes":{"root":{"inputs":{"nixpkgs":"nixpkgs"}}},"root":"root","version":7}
+-- outside/.keep --
+-- fakebin/nix --
+#!/bin/sh
+echo "warning: Git tree is dirty" >&2
+echo "error: syntax error, unexpected '}' at $PWD/overlays/a/flake.nix:3:1" >&2
+exit 1
+-- two/.piste --
+-- two/flake.nix --
+{ }
+-- two/overlays/a/flake.nix --
+{ }
+-- two/overlays/b/flake.nix --
+{ }

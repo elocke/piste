@@ -1,0 +1,31 @@
+# Nix build outputs
+result
+result-*
+
+# Local Claude Code settings
+.claude/settings.local.json
+
+# Local MCP config
+.mcp.json
+
+# Local environment
+.env
+
+# macOS
+.DS_Store
+
+# Git worktrees
+.worktrees/
+
+# Local trash
+TRASH/
+TRASH-FILES.md
+
+# Users' overlay repos (piste checkout layout); each is its own git repo.
+/overlays/
+
+# AI assistant artifacts
+context-snapshot.json
+
+# Scratch plans and specs, never published
+/docs/superpowers/

@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 'bad': harnesses must be a list of strings, not string ("codex")

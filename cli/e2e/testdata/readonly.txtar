@@ -1,0 +1,93 @@
+# The read-only commands: the same external argv and exits (shims record
+# every call). Plain messages are compared exactly; tables / panels only for
+# their rows. Outputs are frozen in $GOLDEN/readonly.
+
+chmod 0755 scenario.sh
+exec git init -q -b master flake
+exec git -C flake add flake.nix flake.lock
+exec git -C flake -c user.email=t@t -c user.name=t commit -q -m 'initial commit for status overlongwordthatoverflowsthecolumn'
+env USER=tester
+
+exec sh scenario.sh
+# Not vacuous: the shims were really reached (the [linux] lines
+# are home-manager argv; on darwin both sides go through darwin-rebuild).
+grep '^nix flake check .*/flake --no-build$' out/01-check.calls
+[linux] grep '^nix build .*#homeConfigurations."tester@linux".activationPackage --dry-run$' out/02-dry.calls
+[linux] grep '^nix build .*#homeConfigurations."tester@y".activationPackage --show-trace$' out/05-build-verbose.calls
+[linux] grep '^home-manager generations$' out/06-log.calls
+[linux] grep '^nh home switch --dry .*/flake$' out/08-gendiff.calls
+[linux] grep '^nh home switch --dry .*/flake -c tester@hh$' out/09-gendiff-host.calls
+[linux] grep '^nix build .*#homeConfigurations."tester@solo".activationPackage --dry-run$' out/14-dry-solo.calls
+[linux] grep '^nix build .*#homeConfigurations."tester@linux".activationPackage --dry-run$' out/15-dry-fallback.calls
+grep '^ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new somehost -- piste update nixpkgs$' out/18-remote-exec.calls
+grep '^5$' out/17-remote-drift-fail.rc
+grep 'overlongwordthatoverflowsthec…' out/21-status-narrow.out
+exec sh normalize.sh
+# drift: one eval of what the host declares, on the names found; its
+# hints are piste adopt's.
+[linux] grep '^nix eval --json .*#homeConfigurations."tester@linux" --apply \(declared.nix\) \[ "leftpad" "githits" "stray" \]$' out/20-drift.calls
+[darwin] grep '^nix eval --json .*#darwinConfigurations."testhost" --apply \(declared.nix\) \[ "leftpad" "githits" "stray" \]$' out/20-drift.calls
+[darwin] grep '^brew leaves --installed-on-request$' out/20-drift.calls
+grep 'adopt' out/20-drift.out
+cmpworkdir $WORK/out $GOLDEN/readonly
+
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out" "$WORK/replies"
+cd "$WORK/flake"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+printf '["tester@other", "tester@box"]' > "$WORK/replies/nix"
+run 01-check check
+run 02-dry dry
+run 03-dry-host dry --host b
+run 04-build build
+run 05-build-verbose -v build --host y
+echo "gen 42" > "$WORK/replies/home-manager"
+run 06-log log
+run 07-diff diff
+run 08-gendiff gendiff
+run 09-gendiff-host gendiff --host hh
+SHIM_EXIT_NIX=1 run 10-check-fail check
+SHIM_EXIT_NIX=3 run 11-build-fail build --host q
+SHIM_EXIT_NIX=2 run 12-dry-fail dry --host q
+SHIM_EXIT_NH=4 run 13-gendiff-fail gendiff
+printf '["tester@solo"]' > "$WORK/replies/nix"
+run 14-dry-solo dry
+printf 'not json' > "$WORK/replies/nix"
+run 15-dry-fallback dry
+run 16-remote-status remote status somehost
+SHIM_EXIT_SSH=5 run 17-remote-drift-fail remote drift somehost
+run 18-remote-exec remote exec somehost update nixpkgs
+run 19-status status
+# rich fits the panel to the console: a narrow one wraps the commit message
+# and cuts the long word with an ellipsis (as a long hostname is cut at 80).
+COLUMNS=60 run 21-status-narrow status
+printf '{"dependencies": {"npm": {}, "leftpad": {}}}' > "$WORK/replies/npm"
+printf '[{"dependencies": {"githits": {}, "stray": {}}}]' > "$WORK/replies/pnpm"
+printf '[]' > "$WORK/replies/pip"
+# What the host declares (drift's one eval): stray is a duplicate, leftpad
+# a package here, githits neither.
+printf '{"nix": ["stray"], "casks": [], "brews": [], "exclude": [], "files": {}, "pkgs": {"leftpad": {"pname": "leftpad", "version": "1.3.0"}}}' > "$WORK/replies/nix"
+run 20-drift drift
+exit 0
+-- normalize.sh --
+# Tables and panels are sized to the work dir path: keep their words only,
+# in C-locale order. An age since the
+# epoch changes daily. (Portable sed: no -i.)
+cd $WORK/out
+for f in *; do sed -E 's/-?[0-9]{4,} days/N days/g' "$f" > "$f.t" && mv "$f.t" "$f"; done
+# drift's eval applies declared.nix, inlined: keep only the names it gets.
+sed -E 's/--apply \(.*\) \[ /--apply (declared.nix) [ /' 20-drift.calls > 20-drift.calls.t && mv 20-drift.calls.t 20-drift.calls
+for f in 16-*.out 17-*.out 19-*.out 20-*.out 21-*.out; do
+  tr -cs 'A-Za-z0-9@.:/_-' '\n' < "$f" | grep -v -e '^/' -e '^flake$' | LC_ALL=C sort | tr '\n' ' ' > "$f.w"; mv "$f.w" "$f"
+done
+-- flake/flake.nix --
+{ outputs = { self }: { homeConfigurations = { }; }; }
+-- flake/flake.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}

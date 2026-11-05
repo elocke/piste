@@ -1,0 +1,2 @@
+gh api repos/o/tool/releases/latest --jq {tag: .tag_name, assets: [.assets[] | {name, url: .browser_download_url}]}
+nix-prefetch-url --type sha256 https://dl/tool-2.0.0-linux.tar.gz

@@ -1,0 +1,13 @@
+# A person's own third-party items in their overlay on a team layer (its
+# agents/, beside the layer's): extends the layer's zone policy with allow
+# entries, and nothing else. This one forgot the allow entry.
+[policy]
+extends = true
+
+[[claude.marketplace]]
+name   = "own-plugins"
+source = "github:example/own-plugins"
+
+[[claude.plugin]]
+id    = "mine@own-plugins"
+scope = "user"

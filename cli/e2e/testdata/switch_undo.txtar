@@ -1,0 +1,329 @@
+# After a switch that changes the active generation, piste checks that
+# a new login shell starts and runs piste, and puts back the generation
+# before when it can't: nix-darwin's darwin-rebuild --switch-generation on a
+# Mac, home-manager's rollback steps (nix-env --switch-generation, the old
+# activate --driver-version 1) on Linux.
+#
+# The profile is $PROF: home-manager's under $HOME on Linux, nix-darwin's
+# under $WORK/.machine (scripttest.PinMachine) on a Mac. Fakebins in
+# $WORK/fake, ahead of the shims, move it as the real tools do; generations
+# live in $WORK/gens/<n>. The login shell ($SHELL; getent and dscl answer
+# nothing) exits 127 when the active generation holds a `broken` file.
+# reset.sh <n>... puts generation 41 back and breaks generations <n>.
+
+env USER=tester
+env SHELL=$WORK/bin/login-sh
+env PATH=$WORK/fake:$PATH
+[linux] env SW=--host=linux
+[linux] env PROF=$HOME/.local/state/nix/profiles/home-manager
+[darwin] env SW=--host=hh
+[darwin] env PROF=$WORK/.machine/profiles/system
+cp fake/home-manager fake/darwin-rebuild
+exec chmod 0755 bin/login-sh fake/home-manager fake/darwin-rebuild fake/sudo fake/nix-env fake/systemd-run gen/activate gen/darwin-rebuild
+mkdir flake
+cp flake.nix flake/flake.nix
+cp flake.lock flake/flake.lock
+exec git -C flake init -q
+cd flake
+
+# switch's help documents the check, detaching and its systemd floor,
+# the way out.
+exec piste switch --help
+stdout 'piste --version'
+stdout 'Ctrl-C leaves it running'
+stdout 'needs systemd 250 or newer'
+stdout 'systemd-run --user --scope'
+stdout '--no-undo skips the checks and the undo'
+
+# pass: the baseline, the switch, the check, then "Switch complete!".
+exec sh $WORK/reset.sh
+exec piste switch $SW
+stdout '(?s)Checking that a new login shell \(\S+/bin/login-sh\) starts and runs piste\.\.\..*Switch complete!'
+grep '\A(login-sh -l -i -c piste --version\n){2}\z' $WORK/shell.calls
+! stdout 'Undo'
+exec readlink $PROF
+stdout '[a-z]-42-link$'
+
+# broken: the new generation fails the check; 41 is put back and 42 stays.
+exec sh $WORK/reset.sh 42
+! exec piste switch $SW
+stderr '^The new generation fails the check: the shell exited 127 after [0-9]+\.[0-9]s\.$'
+stderr '^  zsh: command not found: piste$'
+stdout '(?s)Undoing the switch: back to generation 41\.\.\..*Undone: generation 41 is active again\. 42 stays in the store\.\n  To see what it changed:  piste gendiff\n  To keep it anyway:       piste switch --no-undo\n'
+! stdout 'Switch complete'
+! stderr 'Switch failed'
+exec readlink $PROF
+stdout '[a-z]-41-link$'
+exists $WORK/gens/42/activate
+[linux] grep '(?s)home-manager switch -b backup-\d+ .*\nnix-env --profile \S+/home-manager --switch-generation 41\nactivate 41 --driver-version 1 HOME_MANAGER_BACKUP_EXT=backup-\d+\n' $WORK/calls
+[linux] exec sh $WORK/samebackup.sh
+[darwin] grep '(?s)sudo darwin-rebuild switch .*\nsudo \S+/gens/41/sw/bin/darwin-rebuild --switch-generation 41\ndarwin-rebuild\(gen 41\) --switch-generation 41\n' $WORK/calls
+! grep 'rollback' $WORK/calls
+
+# In a checkout, piste fix's line comes last, after the undo: the
+# machine is on a working generation while piste fix looks.
+exec sh $WORK/reset.sh 42
+mkdir $HOME/piste
+cp flake.nix $HOME/piste/.piste
+! exec piste switch $SW
+stdout '(?s)Undone: generation 41 is active again\..*\nTo have Claude Code fix it: piste fix --(profile|host) \S+\n\z'
+rm $HOME/piste
+
+# --no-undo: today's switch, no shell started.
+exec sh $WORK/reset.sh 42
+exec piste switch $SW --no-undo
+stdout 'Switch complete!'
+! stdout 'Checking that'
+! grep . $WORK/shell.calls
+
+# An unchanged generation: the baseline only, and today's ending.
+exec sh $WORK/reset.sh same
+exec piste switch $SW
+stdout 'Switch complete!'
+! stdout 'Checking that'
+grep '\Alogin-sh -l -i -c piste --version\n\z' $WORK/shell.calls
+
+# A broken baseline: a warning, then the switch as today, no check after.
+exec sh $WORK/reset.sh 41
+exec piste switch $SW
+stdout '^This switch can.t undo itself: a new login shell can.t run piste now \(the shell exited 127 after [0-9]+\.[0-9]s\)\.$'
+stdout '^  zsh: command not found: piste$'
+stdout 'Switch complete!'
+! stdout 'Checking that'
+grep '\Alogin-sh -l -i -c piste --version\n\z' $WORK/shell.calls
+exec readlink $PROF
+stdout '[a-z]-42-link$'
+
+# The same before piste is installed (piste setup through nix run, on a
+# machine that already has generations): the shell can't find piste, and
+# there's no piste yet to protect, so one quiet line in place of the warning.
+exec sh $WORK/reset.sh 41
+exec sh $WORK/nopath-piste switch $SW
+stdout '^piste isn.t installed in the current generation yet, so this switch isn.t checked\.$'
+! stdout 'can.t undo itself'
+! stdout 'command not found'
+stdout 'Switch complete!'
+! stdout 'Checking that'
+
+# A failed undo: the commands to run by hand, and nothing after them. Even in
+# a checkout, no piste fix line: the machine isn't on a working generation
+# until they've run.
+exec sh $WORK/reset.sh 42
+mkdir $HOME/piste
+cp flake.nix $HOME/piste/.piste
+env UNDO_EXIT=1
+! exec piste switch $SW
+env UNDO_EXIT=
+stderr '^The undo failed \(exit code 1\)\. To put generation 41 back by hand:$'
+[linux] stderr '^  nix-env --profile \S+/home-manager --switch-generation 41\n  HOME_MANAGER_BACKUP_EXT=backup-\d+ \S+/gens/41/activate --driver-version 1\n\z'
+[linux] ! grep '^activate' $WORK/calls
+[darwin] stderr '^  sudo \S+/gens/41/sw/bin/darwin-rebuild --switch-generation 41\n\z'
+! stdout 'Undone'
+! stdout 'fix it'
+
+# An undo that exits 0 but leaves the profile elsewhere has failed too.
+exec sh $WORK/reset.sh 42
+env UNDO_NOOP=1
+! exec piste switch $SW
+env UNDO_NOOP=
+stderr '^The undo failed \(generation 42 is active\)\. To put generation 41 back by hand:$'
+! stdout 'Undone'
+! stdout 'fix it'
+rm $HOME/piste
+
+# A failed activation that moved the profile is checked: a pass keeps
+# today's "Switch failed"...
+exec sh $WORK/reset.sh
+env HM_EXIT=3
+! exec piste switch $SW
+stderr '^Switch failed \(exit code 3\)$'
+stdout 'Checking that a new login shell'
+grep '\A(login-sh -l -i -c piste --version\n){2}\z' $WORK/shell.calls
+! stdout 'Undo'
+
+# ...and a failure undoes it, in place of "Switch failed".
+exec sh $WORK/reset.sh 42
+! exec piste switch $SW
+env HM_EXIT=
+stdout 'Undone: generation 41 is active again\. 42 stays in the store\.'
+! stderr 'Switch failed'
+
+# Linux, inside a systemd user service (an agent's runner): the activation
+# may restart the caller, so the switch runs as its own unit and its log is
+# followed here. The fake systemd-run moves the cgroup to piste-switch-1
+# and runs the argv after -- (testscript's piste), appending to the log: only
+# piste's own truncation keeps an earlier switch's log off stdout.
+[!linux] stop 'detaching is Linux only'
+mkdir $WORK/.machine
+exec sh $WORK/reset.sh
+cp $WORK/cgroup.runner $WORK/.machine/cgroup
+! exists $HOME/.local/state/piste
+exec piste switch $SW
+stdout '^This switch runs inside runner\.service, which the switch may restart\.$'
+stdout '^Running it as piste-switch-\d+\.service\. Log: ~/\.local/state/piste/switch\.log$'
+stdout '^Ctrl-C leaves it running; to stop it: systemctl --user stop piste-switch-\d+\.service$'
+stdout '(?s)Checking that a new login shell .*Switch complete!'
+grep '^systemd-run --user --wait --collect --quiet --same-dir --unit piste-switch-\d+ -p StandardOutput=truncate:\S+/home/\.local/state/piste/switch\.log( -E \S+)* -E WORK( -E \S+)* -- \S+/piste switch --host linux$' $WORK/calls
+grep '(?s)^systemd-run .*\nhome-manager switch ' $WORK/calls
+exists $HOME/.local/state/piste/switch.log
+grep 'Switch complete!' $HOME/.local/state/piste/switch.log
+
+# The unit's piste fails the check and undoes; the outer exits with its code.
+# An earlier switch's log never reaches stdout.
+exec sh $WORK/reset.sh 42
+cp $WORK/cgroup.runner $WORK/.machine/cgroup
+cp $WORK/old.log $HOME/.local/state/piste/switch.log
+! exec piste switch $SW
+stdout 'The new generation fails the check'
+stdout 'Undone: generation 41 is active again\. 42 stays in the store\.'
+! stdout 'OLD LOG'
+! grep 'OLD LOG' $HOME/.local/state/piste/switch.log
+! stdout 'To switch anyway'
+
+# systemd-run can't start the unit: its error, what to do instead, and no
+# switch in place.
+exec sh $WORK/reset.sh
+cp $WORK/cgroup.runner $WORK/.machine/cgroup
+env RUN_FAIL=1
+! exec piste switch $SW
+stderr 'Failed to start transient service unit: no bus'
+stdout '^To switch anyway, run piste switch outside runner\.service: from a terminal or ssh, or under systemd-run --user --scope\.$'
+! stderr 'systemd 250'
+! grep 'home-manager switch' $WORK/calls
+! stdout 'Switch complete'
+
+# A systemd older than 250 can't take a bare -E NAME: piste says so.
+exec sh $WORK/reset.sh
+cp $WORK/cgroup.runner $WORK/.machine/cgroup
+env RUN_VERSION=249
+! exec piste switch $SW
+env RUN_FAIL= RUN_VERSION=
+stderr '^piste needs systemd 250 or newer to run the switch as its own unit; this is systemd 249\.$'
+stdout '^To switch anyway, run piste switch outside runner\.service'
+! grep 'home-manager switch' $WORK/calls
+
+-- cgroup.runner --
+0::/user.slice/user-1000.slice/user@1000.service/app.slice/runner.service
+-- old.log --
+OLD LOG
+-- fake/systemd-run --
+#!/bin/sh
+# systemd-run --user --wait ... -- <argv>: run argv as the unit would, in
+# piste-switch-1.service, its output in the -p StandardOutput=truncate: log.
+{ printf 'systemd-run'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ "$1" = --version ]; then
+  echo "systemd ${RUN_VERSION:-255} (${RUN_VERSION:-255}.4-1)"
+  echo "+PAM +AUDIT default-hierarchy=unified"
+  exit 0
+fi
+if [ -n "$RUN_FAIL" ]; then
+  echo "Failed to start transient service unit: no bus" >&2
+  exit 1
+fi
+log=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --) shift; break ;;
+    -p) case $2 in StandardOutput=truncate:*) log=${2#StandardOutput=truncate:} ;; esac; shift 2 ;;
+    -E|--unit) shift 2 ;;
+    *) shift ;;
+  esac
+done
+echo "0::/user.slice/user-1000.slice/user@1000.service/app.slice/piste-switch-1.service" > "$WORK/.machine/cgroup"
+"$@" >> "$log" 2>&1
+-- flake.nix --
+{ outputs = { self }: { darwinConfigurations = { }; }; }
+-- flake.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}
+-- bin/login-sh --
+#!/bin/sh
+# A login shell, with only sh builtins (the check's PATH is sshd's
+# default): it can't run piste when the active generation is broken.
+root=${0%/bin/login-sh}
+echo "login-sh $*" >> "$root/shell.calls"
+for p in "$root/.machine/profiles/system" "$HOME/.local/state/nix/profiles/home-manager"; do
+  if [ -e "$p/broken" ]; then
+    echo "zsh: command not found: piste" >&2
+    exit 127
+  fi
+done
+echo "piste version test"
+-- fake/home-manager --
+#!/bin/sh
+# home-manager switch / darwin-rebuild switch: point $PROF at the next
+# generation (unless $WORK/same: nothing new), then exit $HM_EXIT.
+n=$(basename "$0")
+{ printf '%s' "$n"; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ "$1" = switch ] && [ ! -e "$WORK/same" ]; then
+  cur=$(readlink "$PROF"); cur=${cur%-link}; cur=${cur##*-}
+  sh "$WORK/setgen.sh" "$PROF" $((cur + 1))
+fi
+exit "${HM_EXIT:-0}"
+-- fake/sudo --
+#!/bin/sh
+{ printf 'sudo'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+exec "$@"
+-- fake/nix-env --
+#!/bin/sh
+# nix-env --profile P --switch-generation N
+{ printf 'nix-env'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ "$1" = --profile ] && [ "$3" = --switch-generation ] && [ "${UNDO_EXIT:-0}" = 0 ] && [ -z "$UNDO_NOOP" ]; then
+  sh "$WORK/setgen.sh" "$2" "$4"
+fi
+exit "${UNDO_EXIT:-0}"
+-- gen/activate --
+#!/bin/sh
+g=${0%/activate}
+echo "activate ${g##*/} $* HOME_MANAGER_BACKUP_EXT=$HOME_MANAGER_BACKUP_EXT" >> "$WORK/calls"
+-- gen/darwin-rebuild --
+#!/bin/sh
+# A generation's own darwin-rebuild: --switch-generation N repoints the
+# system profile and activates N.
+g=${0%/sw/bin/darwin-rebuild}
+echo "darwin-rebuild(gen ${g##*/}) $*" >> "$WORK/calls"
+if [ "$1" = --switch-generation ] && [ "${UNDO_EXIT:-0}" = 0 ] && [ -z "$UNDO_NOOP" ]; then
+  sh "$WORK/setgen.sh" "$PROF" "$2"
+fi
+exit "${UNDO_EXIT:-0}"
+-- setgen.sh --
+# setgen.sh <profile> <n>: point <profile> at generation <n>, as nix-env does.
+p=$1 n=$2
+mkdir -p "$(dirname "$p")"
+ln -sfn "$WORK/gens/$n" "$p-$n-link"
+ln -sfn "$(basename "$p")-$n-link" "$p"
+-- reset.sh --
+# reset.sh [<n>|same]...: generation 41 active, gens 41-44, empty logs;
+# <n> breaks generation n, `same` makes the switch build nothing new.
+rm -rf "$WORK/gens" "$(dirname "$PROF")" "$WORK/same"
+for n in 41 42 43 44; do
+  mkdir -p "$WORK/gens/$n/sw/bin"
+  cp "$WORK/gen/activate" "$WORK/gens/$n/activate"
+  cp "$WORK/gen/darwin-rebuild" "$WORK/gens/$n/sw/bin/darwin-rebuild"
+done
+sh "$WORK/setgen.sh" "$PROF" 41
+for a in "$@"; do
+  case $a in
+    same) : > "$WORK/same" ;;
+    *) : > "$WORK/gens/$a/broken" ;;
+  esac
+done
+: > "$WORK/calls"
+: > "$WORK/shell.calls"
+-- nopath-piste --
+# piste with no piste on PATH, as `nix run .#piste --` runs it: every
+# directory holding one leaves PATH (the machine's own piste too).
+p=$(command -v piste)
+keep=
+IFS=:
+for d in $PATH; do
+  [ -x "$d/piste" ] || keep=${keep:+$keep:}$d
+done
+unset IFS
+PATH=$keep
+export PATH
+exec "$p" "$@"
+-- samebackup.sh --
+# The undo's HOME_MANAGER_BACKUP_EXT is the switch's -b.
+sw=$(sed -n 's/^home-manager switch -b \(backup-[0-9]*\) .*/\1/p' "$WORK/calls")
+un=$(sed -n 's/^activate 41 .* HOME_MANAGER_BACKUP_EXT=//p' "$WORK/calls")
+[ -n "$sw" ] && [ "$sw" = "$un" ] || { echo "switch -b $sw, undo $un" >&2; exit 1; }

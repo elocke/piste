@@ -1,0 +1,2 @@
+targets = ["claude", "codex"]
+hooks = ["rtk-rewrite"]

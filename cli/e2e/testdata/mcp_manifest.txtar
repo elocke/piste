@@ -1,0 +1,232 @@
+# `piste mcp check` on invalid and edge-case manifests (the manifest /
+# retired / harnessEnv validation cases), plus the Claude global-config path
+# variants: each exits the same way with the same message. Outputs are
+# frozen in $GOLDEN/mcp_manifest.
+
+chmod 0755 scenario.sh
+chmod 0755 fakebin/claude
+chmod 0755 fakebin/codex
+env USER=tester
+
+exec sh scenario.sh
+# not vacuous: each invalid manifest is rejected with its own message
+grep 'duplicate server name: gw' out/dup.err
+grep 'must be an env var NAME' out/literal-bearer.err
+grep 'looks like a credential value' out/secret-url.err
+grep 'args\[1\] must be a string' out/nonstring-arg.err
+! grep credential out/ok-pinned-sha.err
+grep 'retired must be a list of server names' out/retired-not-list.err
+# bad TOML: one error line
+grep . out/bad-toml.err
+# the right config file was read: only it has gw's current definition
+grep 'gw drifted' out/cfg-home-wrong.err
+! grep 'gw drifted' out/cfg-home.err
+! grep 'gw drifted' out/cfg-dir.err
+! grep 'gw drifted' out/cfg-oauth.err
+cmpworkdir $WORK/out $GOLDEN/mcp_manifest
+
+-- fakebin/claude --
+#!/bin/sh
+echo "claude $*" >> "$WORK/calls"
+[ "$1 $2" = "mcp list" ] && echo "gw: https://gw.example/mcp (HTTP) - ✓ Connected"
+exit 0
+-- fakebin/codex --
+#!/bin/sh
+echo "codex $*" >> "$WORK/calls"
+[ "$1 $2 $3" = "mcp list --json" ] && echo "${CODEX_JSON:-[]}"
+exit 0
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out" "$WORK/h"; mkdir -p "$out"
+H=$WORK/h; A=$H/src/personal/agents
+export HOME=$H PATH=$WORK/fakebin:$PATH COLUMNS=500 GW_TOKEN=x
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+for f in $WORK/fx/*.toml; do
+  c=$(basename "$f" .toml)
+  rm -rf "$H"; mkdir -p "$A" "$H/.codex"
+  sed "/^M$/{
+r $WORK/base.toml
+d
+}" "$f" > "$A/agents.toml"
+  echo '{ }' > "$H/src/personal/flake.nix"
+  cd "$H/src/personal"
+  run "$c" mcp check
+done
+# the Claude global config piste reads: ~/.claude.json, $CLAUDE_CONFIG_DIR,
+# and the custom-OAuth suffix. Only the file piste should read holds gw's
+# current definition; the others hold a stale url (drift).
+cp "$WORK/base.toml" "$A/agents.toml"
+cp "$WORK/wrong.json" "$H/.claude.json"
+run cfg-home-wrong mcp check
+cp "$WORK/right.json" "$H/.claude.json"
+run cfg-home mcp check
+cp "$WORK/wrong.json" "$H/.claude.json"
+mkdir -p "$H/cfgdir"; cp "$WORK/right.json" "$H/cfgdir/.claude.json"
+CLAUDE_CONFIG_DIR=$H/cfgdir run cfg-dir mcp check
+cp "$WORK/right.json" "$H/.claude-custom-oauth.json"
+CLAUDE_CODE_CUSTOM_OAUTH_URL=https://example run cfg-oauth mcp check
+# codex `mcp list --json` shapes: an error object is rejected (not read as
+# servers), an empty dict or list is zero servers
+CODEX_JSON='{"error": "boom"}' run codex-error-object mcp check
+CODEX_JSON='{}' run codex-empty-dict mcp check
+CODEX_JSON='{"gw": {"transport": {"type": "streamable_http", "url": "https://gw.example/mcp", "bearer_token_env_var": "GW_TOKEN"}}}' run codex-dict mcp check
+exit 0
+-- right.json --
+{"mcpServers": {"gw": {"type": "http", "url": "https://gw.example/mcp", "headers": {"Authorization": "Bearer ${GW_TOKEN}"}}}}
+-- wrong.json --
+{"mcpServers": {"gw": {"type": "http", "url": "https://stale.example/mcp", "headers": {"Authorization": "Bearer ${GW_TOKEN}"}}}}
+-- base.toml --
+[[mcp]]
+name = "gw"
+transport = "http"
+url = "https://gw.example/mcp"
+bearerEnv = "GW_TOKEN"
+harnesses = ["claude-code", "codex"]
+-- fx/dup.toml --
+M
+[[mcp]]
+name = "gw"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+-- fx/literal-bearer.toml --
+[[mcp]]
+name = "bad"
+transport = "http"
+url = "https://example.com/mcp"
+bearerEnv = "sk-abcdef0123456789abcdef"
+harnesses = ["codex"]
+-- fx/http-no-url.toml --
+[[mcp]]
+name = "bad"
+transport = "http"
+harnesses = ["codex"]
+-- fx/unknown-harness.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = ["emacs"]
+-- fx/string-hosts.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+hosts = "box1"
+-- fx/string-args.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+args = "start"
+harnesses = ["codex"]
+-- fx/string-harnesses.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = "codex"
+-- fx/empty-hosts.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+hosts = []
+-- fx/string-env.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+env = "A=1"
+-- fx/secret-env.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+env = { API_TOKEN = "sk-abcdef0123456789abcdef" } # gitleaks:allow (fake, a reject case)
+-- fx/secret-url.toml --
+[[mcp]]
+name = "bad"
+transport = "http"
+url = "https://example.com/w/x?token=abcdef0123456789abcdef0123456789" # gitleaks:allow (fake, a reject case)
+harnesses = ["codex"]
+-- fx/secret-arg.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+args = ["--api-key", "abcdef0123456789abcdef0123456789"] # gitleaks:allow (fake, a reject case)
+harnesses = ["codex"]
+-- fx/nonstring-arg.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+args = ["--port", 9223]
+harnesses = ["codex"]
+-- fx/no-harnesses.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+command = "true"
+harnesses = []
+-- fx/no-name.toml --
+[[mcp]]
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+-- fx/stdio-no-command.toml --
+[[mcp]]
+name = "bad"
+transport = "stdio"
+harnesses = ["codex"]
+-- fx/retired-not-list.toml --
+retired = "old"
+[[mcp]]
+name = "gw"
+transport = "http"
+url = "https://gw.example/mcp"
+bearerEnv = "GW_TOKEN"
+harnesses = ["claude-code", "codex"]
+-- fx/retired-declared.toml --
+retired = ["gw"]
+[[mcp]]
+name = "gw"
+transport = "http"
+url = "https://gw.example/mcp"
+bearerEnv = "GW_TOKEN"
+harnesses = ["claude-code", "codex"]
+-- fx/harnessenv-undeclared.toml --
+[[mcp]]
+name = "t"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+harnessEnv = { claude-code = { A = "1" } }
+-- fx/harnessenv-secret.toml --
+[[mcp]]
+name = "t"
+transport = "stdio"
+command = "true"
+harnesses = ["codex"]
+harnessEnv = { codex = { A = "sk-abcdef0123456789abcdef" } }
+-- fx/ok-pinned-sha.toml --
+[[mcp]]
+name = "serena"
+transport = "stdio"
+command = "uvx"
+args = ["--from", "git+https://github.com/oraios/serena@949a27ef1e5fda1a6e7b561e777bcece345c6ffd", "serena"]
+harnesses = ["codex"]
+-- fx/bad-toml.toml --
+[[mcp]
+name = "x"

@@ -1,0 +1,50 @@
+# own_only_mcp_project: add / remove of our MCP entry in
+# .mcp.json + .codex/config.toml; the foreign servers are byte-identical.
+
+mkdir proj/.git
+cd proj
+cp .mcp.json mcp.orig
+cp .codex/config.toml codex.orig
+
+exec piste agents add shared:mcp/demo $RS
+stdout 'update +\.mcp\.json'
+stdout 'update +\.codex/config\.toml'
+grep '"demo": \{' .mcp.json
+grep '"foreign7": \{ "command": "f7", "args": \["--x"\] \}' .mcp.json
+prefix codex.orig .codex/config.toml
+grep '^env_vars = \[.DEMO_TOKEN.\]$' .codex/config.toml
+
+exec piste agents remove shared:mcp/demo $RS
+cmp .mcp.json mcp.orig
+cmp .codex/config.toml codex.orig
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/.mcp.json --
+{
+  "mcpServers": {
+    "foreign1": { "command": "f1", "args": ["--x"] },
+    "foreign2": { "command": "f2", "args": ["--x"] },
+    "foreign3": { "command": "f3", "args": ["--x"] },
+    "foreign4": { "command": "f4", "args": ["--x"] },
+    "foreign5": { "command": "f5", "args": ["--x"] },
+    "foreign6": { "command": "f6", "args": ["--x"] },
+    "foreign7": { "command": "f7", "args": ["--x"] }
+  }
+}
+-- proj/.codex/config.toml --
+# user codex config
+model = "gpt-5"
+
+[mcp_servers.foreign1]
+command = "f1" # keep
+
+[mcp_servers.foreign2]
+command = "f2" # keep
+
+[mcp_servers.foreign3]
+command = "f3" # keep
+
+[mcp_servers.foreign4]
+url = "https://h/4"

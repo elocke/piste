@@ -1,0 +1,43 @@
+# lock_all_kinds: after sync, the lock has a hash entry for
+# each of the 10 kinds.
+
+mkdir proj/.git
+cd proj
+exec piste agents sync $RS
+grep '^\[\[skill\]\]$' .agents/agents.lock
+grep '^\[\[subagent\]\]$' .agents/agents.lock
+grep '^\[\[instruction\]\]$' .agents/agents.lock
+grep '^\[\[hook\]\]$' .agents/agents.lock
+grep '^\[\[mcp\]\]$' .agents/agents.lock
+grep '^\[\[claude\.plugin\]\]$' .agents/agents.lock
+grep '^\[\[claude\.marketplace\]\]$' .agents/agents.lock
+grep '^\[\[installer\]\]$' .agents/agents.lock
+grep '^\[\[tool\]\]$' .agents/agents.lock
+grep '^\[\[bundle\]\]$' .agents/agents.lock
+! grep 'sha256 = .{0,2}$' .agents/agents.lock
+exists .agents/bundles/hermes-family/manifest.json
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+
+[[use]]
+id = "shared:skill/alpha"
+[[use]]
+id = "shared:agent/rev"
+[[use]]
+id = "shared:instruction/never"
+[[use]]
+id = "shared:hook/guard"
+[[use]]
+id = "shared:mcp/demo"
+[[use]]
+id = "shared:plugin/demoplug"
+[[use]]
+id = "shared:marketplace/demo-market"
+[[use]]
+id = "shared:installer/hindsight"
+[[use]]
+id = "shared:tool/rtk"
+[[use]]
+id = "shared:bundle/hermes-family"

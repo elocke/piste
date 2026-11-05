@@ -1,0 +1,199 @@
+# container_bundle_work: the work container bundle
+# holds shared + work content only, in the /etc system-scope layout, and the
+# work zone's deny-unlisted policy is enforced at render time.
+
+env CS=--zone-root=shared=shared:$WORK/c/shared
+env CW=--zone-root=work=work:$WORK/c/work
+env CP=--zone-root=personal=personal:$WORK/c/personal
+
+exec piste agents bundle --zone work --target claude,codex shared:bundle/base work:bundle/work --out out --source-commit work=abc123 $CS $CW
+stdout 'work container bundle, 2 skills, 1 plugins'
+exists out/etc/claude-code/.claude/skills/alpha/SKILL.md
+exists out/etc/claude-code/.claude/skills/delta/SKILL.md
+exists out/etc/codex/skills/alpha/SKILL.md
+exists out/etc/codex/skills/delta/SKILL.md
+# Claude-only frontmatter stays for Claude, is dropped for Codex.
+grep 'allowed-tools' out/etc/claude-code/.claude/skills/alpha/SKILL.md
+! grep 'allowed-tools' out/etc/codex/skills/alpha/SKILL.md
+# Instructions: sorted by order, source-marked; Codex gets the include inlined.
+grep 'piste-agents:begin' out/etc/claude-code/CLAUDE.md
+grep '@TOOL.md' out/etc/claude-code/CLAUDE.md
+grep 'Company policy' out/etc/claude-code/CLAUDE.md
+grep 'Codex tool notes' out/home/.codex/AGENTS.md
+! grep '@TOOL.md' out/home/.codex/AGENTS.md
+! exists out/home/.claude
+# Plugins: managed settings; no managed-mcp.json without declared servers.
+grep '"lsp@claude-plugins-official": true' out/etc/claude-code/managed-settings.d/50-agents.json
+! exists out/etc/claude-code/managed-mcp.json
+! exists out/hooks
+# The manifest: shared + work sources only, with the given rev.
+grep '"zone": "work"' out/manifest.json
+grep '"rev": "abc123"' out/manifest.json
+! grep personal out/manifest.json
+notmp out
+
+# A personal zone root never reaches a work bundle.
+! exec piste agents bundle --zone work --target claude,codex shared:bundle/base --out out2 $CS $CW $CP
+stderr 'zone root personal is personal content; this is a work zone'
+! exists out2
+
+# An unapproved marketplace the work zone declares fails the render, used by
+# a plugin or not.
+cp c/work/agents.toml c/work/agents.toml.orig
+cp c/extra-market.toml c/work/agents.toml
+! exec piste agents bundle --zone work --target claude,codex shared:bundle/base --out out3 $CS $CW
+stderr 'work:marketplace/sneaky: source "github:example/sneaky" is not in \[policy\] allow'
+! exists out3
+
+# So does an installer, which the work zone does not allow at all.
+cp c/work/agents.toml.orig c/work/agents.toml
+cp c/installer.toml c/shared/agents.base.toml
+! exec piste agents bundle --zone work --target claude,codex shared:bundle/base --out out3 $CS $CW
+stderr 'this zone allows no installers'
+
+# A shared-catalog marketplace no plugin of the zone names is not the zone's
+# (lib/agents.nix usedMarketplaces): neither policy-checked nor rendered.
+cp c/catalog.toml c/shared/agents.base.toml
+exec piste agents bundle --zone work --target claude shared:bundle/base --out out7 $CS $CW
+grep '"lsp@claude-plugins-official": true' out7/etc/claude-code/managed-settings.d/50-agents.json
+! grep catalog out7/etc/claude-code/managed-settings.d/50-agents.json
+# A work plugin naming it makes it the zone's: rendered once allowed...
+cp c/use-catalog-allowed.toml c/work/agents.toml
+exec piste agents bundle --zone work --target claude shared:bundle/base --out out8 $CS $CW
+grep '"repo": "example/catalog"' out8/etc/claude-code/managed-settings.d/50-agents.json
+# ...and refused while its source is not.
+cp c/use-catalog.toml c/work/agents.toml
+! exec piste agents bundle --zone work --target claude shared:bundle/base --out out9 $CS $CW
+stderr 'shared:marketplace/catalog: source "github:example/catalog" is not in \[policy\] allow'
+! exists out9
+
+# Declared MCP servers: not bundled unless --managed-mcp (managed-mcp.json
+# takes exclusive control of MCP in Claude Code), with a warning saying so.
+cp c/work/agents.toml.orig c/work/agents.toml
+cp c/base.toml c/shared/agents.base.toml
+cp c/mcp.toml c/work/agents.toml
+exec piste agents bundle --zone work --target claude,codex shared:bundle/base work:bundle/work --out out5 $CS $CW
+stderr 'MCP server\(s\) orca declared but not bundled: managed-mcp.json is opt-in \(--managed-mcp\)'
+! exists out5/etc/claude-code/managed-mcp.json
+exec piste agents bundle --zone work --target claude,codex --managed-mcp shared:bundle/base work:bundle/work --out out6 $CS $CW
+grep '"orca"' out6/etc/claude-code/managed-mcp.json
+grep 'mcp.example.com' out6/etc/claude-code/managed-mcp.json
+
+# Hooks are not bundled yet: an error, not a broken hook.
+cp c/work/agents.toml.orig c/work/agents.toml
+cp c/base.toml c/shared/agents.base.toml
+! exec piste agents bundle --zone work --target claude,codex work:bundle/hooky --out out4 $CS $CW
+stderr 'container bundles do not carry hooks yet'
+
+-- c/shared/skills/web/alpha/SKILL.md --
+---
+name: alpha
+description: Use when alpha things happen.
+allowed-tools: Bash
+---
+Alpha body.
+-- c/shared/instructions/tools.md --
+---
+targets: ["claude", "codex"]
+order: 20
+---
+@TOOL.md
+-- c/shared/instructions/include/codex/TOOL.md --
+# Codex tool notes
+-- c/shared/presets/base.toml --
+targets = ["claude", "codex"]
+skills = ["alpha"]
+instructions = ["tools"]
+-- c/shared/agents.base.toml --
+[[claude.marketplace]]
+name   = "claude-plugins-official"
+source = "github:anthropics/claude-plugins-official"
+
+[[claude.plugin]]
+id = "lsp@claude-plugins-official"
+
+[[tool]]
+name   = "rtk"
+source = "nix:piste#rtk"
+-- c/base.toml --
+[[claude.marketplace]]
+name   = "claude-plugins-official"
+source = "github:anthropics/claude-plugins-official"
+
+[[claude.plugin]]
+id = "lsp@claude-plugins-official"
+-- c/extra-market.toml --
+[policy]
+allow    = ["github:anthropics/claude-plugins-official"]
+unlisted = "deny"
+
+[[claude.marketplace]]
+name   = "sneaky"
+source = "github:example/sneaky"
+-- c/catalog.toml --
+[[claude.marketplace]]
+name   = "claude-plugins-official"
+source = "github:anthropics/claude-plugins-official"
+
+[[claude.marketplace]]
+name   = "catalog"
+source = "github:example/catalog"
+
+[[claude.plugin]]
+id = "lsp@claude-plugins-official"
+-- c/use-catalog.toml --
+[policy]
+allow    = ["github:anthropics/claude-plugins-official"]
+unlisted = "deny"
+
+[[claude.plugin]]
+id = "thing@catalog"
+-- c/use-catalog-allowed.toml --
+[policy]
+allow    = ["github:anthropics/claude-plugins-official", "github:example/catalog"]
+unlisted = "deny"
+
+[[claude.plugin]]
+id = "thing@catalog"
+-- c/installer.toml --
+[[hook]]
+name      = "vendor"
+installer = "npm:@example/vendor"
+version   = "1.0.0"
+-- c/mcp.toml --
+[policy]
+allow    = ["github:anthropics/claude-plugins-official"]
+unlisted = "deny"
+
+[[mcp]]
+name = "orca"
+url  = "https://mcp.example.com"
+-- c/work/agents.toml --
+[policy]
+allow    = ["github:anthropics/claude-plugins-official"]
+unlisted = "deny"
+-- c/work/skills/job/delta/SKILL.md --
+---
+name: delta
+description: Use when work delta.
+---
+Work.
+-- c/work/instructions/policy.md --
+---
+targets: ["claude", "codex"]
+order: 5
+---
+# Company policy
+-- c/work/presets/work.toml --
+targets = ["claude", "codex"]
+skills = ["delta"]
+instructions = ["policy"]
+-- c/work/presets/hooky.toml --
+targets = ["claude", "codex"]
+hooks = ["guard"]
+-- c/personal/skills/home/beta/SKILL.md --
+---
+name: beta
+description: Use when ZONE-P personal beta.
+---
+ZONE-P

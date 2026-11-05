@@ -1,0 +1,30 @@
+# check_semantic: a reformat is not drift; an edit of an owned
+# value is drift (exit 1). Foreign keys are never "clean", only unknown.
+
+mkdir proj/.git
+cd proj
+exec piste agents add shared:mcp/demo $RS
+exec piste agents drift $RS
+stdout '^unknown +\.mcp\.json#/mcpServers/foreign'
+
+# Reformat the whole file (our entry included): not drift.
+cp reformatted.json .mcp.json
+exec piste agents drift $RS
+! stdout '^edited'
+
+# Change our value: drift.
+replace '"--stdio"' '"--http"' .mcp.json
+! exec piste agents drift $RS
+stdout '^edited +\.mcp\.json#/mcpServers/demo'
+
+-- proj/.mcp.json --
+{
+  "mcpServers": {
+    "foreign": {"command": "f"}
+  }
+}
+-- proj/reformatted.json --
+{"mcpServers":{"foreign":{"command":"f"},"demo":{"env":{"DEMO_TOKEN":"${DEMO_TOKEN}"},"command":"demo-mcp","args":["--stdio"]}}}
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

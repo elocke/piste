@@ -1,0 +1,1 @@
+piste-agents: REFUSED $WORK/h/.claude/CLAUDE.md: the managed block was edited since piste-agents last wrote it; not overwriting (edit the fragment instead, or `piste agents apply --force`)

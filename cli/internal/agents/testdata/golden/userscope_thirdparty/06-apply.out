@@ -1,0 +1,13 @@
+piste-agents: running: claude plugin marketplace update piste-local
+note: claude.marketplace drift: at cccccccccccc, lock bbbbbbbbbbbb (github:o/drift); `piste agents sync --user --repin` switches it to a pinned mirror
+note: claude.marketplace new: not locked; run `piste agents update` first
+install gone@urlm
+disable gone@urlm (declared enabled = false)
+install missing@good
+enable off@good
+update old@good to the locked marketplace
+disable pua@urlm (declared enabled = false)
+add codex plugin figma@openai-curated
+pin drifty@2.0.0 in the pnpm bucket
+uninstall undeclared claude plugin stray@good
+remove undeclared codex plugin extra@local

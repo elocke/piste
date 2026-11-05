@@ -1,0 +1,42 @@
+# The root: help lists the commands and plugins; version, completion
+# and man pages come from fang/cobra.
+
+exec piste --help
+stdout 'switch'
+stdout 'clean'
+stdout 'completion'
+# Maintainer tools and the plumbing the Nix modules call run, but aren't listed.
+! stdout 'update-overlays'
+! stdout '\bsync\b'
+! stdout '\bremote\b'
+! stdout '\bpkg\b'
+exec piste agents --help
+! stdout '(?m)^\s+(bundle|registry|budget)\b'
+
+exec piste --version
+stdout 'dev'
+
+exec piste completion zsh
+stdout '#compdef piste'
+exec piste completion bash
+stdout 'bash completion'
+exec piste completion fish
+stdout 'complete -c piste'
+
+exec piste man
+stdout '\.TH'
+
+# Dynamic completion knows the groups' subcommands (secrets is a Go group
+# now, so they come with descriptions).
+exec piste __complete secrets ''
+stdout '^init(\t|$)'
+stdout '^status(\t|$)'
+
+# An unknown command with no plugin is cobra's error.
+! exec piste nosuchcommand
+stderr '(?i)unknown command'
+
+# The binary ships the third-party notices.
+exec piste --licenses
+stdout 'Copyright \(c\) 2024 dyoshikawa'
+stdout 'internal/agents/adapter/permissions.go'

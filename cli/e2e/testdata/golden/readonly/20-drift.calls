@@ -1,0 +1,5 @@
+npm list -g --depth=0 --json
+pnpm list -g --depth=0 --json
+pip list --user --format=json
+nix eval --json $WORK/flake#homeConfigurations --apply builtins.attrNames --no-write-lock-file
+nix eval --json $WORK/flake#homeConfigurations."tester@linux" --apply (declared.nix) [ "leftpad" "githits" "stray" ]

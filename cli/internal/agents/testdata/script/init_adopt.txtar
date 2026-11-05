@@ -1,0 +1,54 @@
+# init_adopt: audit works before init; init
+# --adopt turns registry copies into [[use]] and hand-made content into
+# [[local]], so nothing is left hand-made or unknown and drift --ci passes.
+
+[!exec:git] skip 'needs git (hand-made = tracked in git)'
+cd proj
+exec git init -q
+exec git add -A
+mkdir .claude/skills/stray
+
+exec piste agents audit $RS $RP
+stdout '^registry +\.claude/skills/gamma +matches shared:skill/gamma'
+stdout '^hand-made +\.claude/skills/mine'
+stdout '^hand-made +CLAUDE\.md'
+stdout '^hand-made +\.claude/settings\.json#/hooks/PreToolUse/0'
+stdout '^unknown +\.claude/skills/stray'
+
+exec piste agents init --adopt $RS $RP
+stdout 'wrote \.agents/agents\.toml \(zone = "personal"\)'
+grep '^id = "shared:skill/gamma"$' .agents/agents.toml
+grep '^path = "\.claude/skills/mine"$' .agents/agents.toml
+grep '^path = "CLAUDE\.md"$' .agents/agents.toml
+grep '^path = "\.claude/settings\.json#/hooks/PreToolUse"$' .agents/agents.toml
+! grep 'stray' .agents/agents.toml
+exists .agents/skills/gamma/SKILL.md
+
+exec piste agents audit $RS $RP
+! stdout '^hand-made'
+stdout '^local +\.claude/skills/mine'
+stdout '^registry +\.agents/skills/gamma'
+
+# The untracked stray skill is still unknown: --ci fails until it is dealt with.
+! exec piste agents drift --ci $RS $RP
+stdout '^unknown +\.claude/skills/stray'
+mv .claude/skills/stray ../gone
+exec piste agents drift --ci $RS $RP
+stdout '^local +\.claude/skills/mine'
+
+-- proj/CLAUDE.md --
+# Project notes
+-- proj/.claude/settings.json --
+{"hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "./mine.sh"}]}]}}
+-- proj/.claude/skills/mine/SKILL.md --
+---
+name: mine
+description: Use when a project-specific thing.
+---
+Mine.
+-- proj/.claude/skills/gamma/SKILL.md --
+---
+name: gamma
+description: Use when gamma.
+---
+Gamma.

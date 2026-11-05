@@ -1,0 +1,5 @@
+claude plugin list --json
+claude plugin marketplace list --json
+claude plugin list --json
+codex plugin list --json
+pnpm list -g --depth=0 --json

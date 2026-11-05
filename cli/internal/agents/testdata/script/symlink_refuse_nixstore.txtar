@@ -1,0 +1,16 @@
+# symlink_refuse_nixstore: a store-style target (.codex is a
+# link into /nix/store) → a clear refusal, exit 1, nothing written.
+[!store] skip 'no /nix/store here'
+
+mkdir proj/.git
+symlink proj/.codex -> /nix/store
+cd proj
+
+! exec piste agents add shared:mcp/demo $RS
+stderr 'Nix store|symlink'
+! exists .mcp.json
+! exists .agents/agents.lock
+! grep 'shared:mcp/demo' .agents/agents.toml
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

@@ -1,0 +1,66 @@
+# toml_comments_preserved: every line outside the managed
+# block is byte-identical after sync; a duplicate-key injection aborts with
+# no write.
+
+mkdir proj/.git
+cd proj
+cp .codex/config.toml config.orig
+
+exec piste agents add shared:mcp/demo $RS
+prefix config.orig .codex/config.toml
+grep '^# >>> piste:managed mcp$' .codex/config.toml
+exec piste agents remove shared:mcp/demo $RS
+cmp .codex/config.toml config.orig
+
+# A hand-written [mcp_servers.demo] would duplicate our table: abort, write nothing.
+cp dup.toml .codex/config.toml
+cp dup.toml dup.orig
+! exec piste agents add shared:mcp/demo $RS
+stderr 'invalid|already'
+cmp .codex/config.toml dup.orig
+! exists .mcp.json
+! grep 'shared:mcp/demo' .agents/agents.toml
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/.codex/config.toml --
+# Codex config
+# Added by bosun
+model = "gpt-5" # inline
+
+# comment 0: keep me
+# comment 1: keep me
+# comment 2: keep me
+# comment 3: keep me
+# comment 4: keep me
+# comment 5: keep me
+# comment 6: keep me
+# comment 7: keep me
+# comment 8: keep me
+# comment 9: keep me
+# comment 10: keep me
+# comment 11: keep me
+# comment 12: keep me
+# comment 13: keep me
+# comment 14: keep me
+# comment 15: keep me
+# comment 16: keep me
+# comment 17: keep me
+# comment 18: keep me
+# comment 19: keep me
+# comment 20: keep me
+# comment 21: keep me
+# comment 22: keep me
+# comment 23: keep me
+# comment 24: keep me
+# comment 25: keep me
+# comment 26: keep me
+# comment 27: keep me
+
+[projects."/home/u/p"]
+trust_level = "trusted"
+-- proj/dup.toml --
+# mine
+[mcp_servers.demo]
+command = "my-own-demo"

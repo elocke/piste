@@ -1,0 +1,2 @@
+kind    = "claude-profile"
+plugins = ["undeclared@market"]

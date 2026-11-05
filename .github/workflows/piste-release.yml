@@ -1,0 +1,133 @@
+name: piste-release
+
+# piste's releases. CHANGELOG.md is the source: a release heading
+# with no tag yet (`changelog pending`, cli/cmd/changelog) becomes the tag
+# vX.Y.Z and its GitHub release in one call (gh release create --target),
+# with that heading's notes. No binaries are attached: the release is its
+# source (the Go dependencies' notices ride in the repo, and a binary would
+# have to carry them). The static piste for machines without Nix
+# (piste-{linux,darwin}-{amd64,arm64} + SHA256SUMS, .#piste-release) is still
+# built and smoke-tested here, so attaching it later is one flag. The tag goes
+# on the commit that cut the release (`changelog target`), and that build is
+# of it, not of this run's commit: a release retried by a later push takes
+# nothing merged since.
+#
+# Then the `stable` branch is fast-forwarded to the newest release tag, after
+# the tag exists and never before: `nix run github:elocke/piste/stable -- setup`
+# is the README's bootstrap, so a push to main can't break onboarding.
+# A cut whose commit brought other changes with it (a bump PR merged by hand
+# behind main) fails here, red, rather than ship them as the patch: cut a
+# minor over them.
+#
+# A hand-cut minor or major is an ordinary merge, so its push starts this. A
+# merge made with GITHUB_TOKEN starts no workflow, so lock-review.yml
+# dispatches this after merging the weekly bump, which cut its own patch.
+# Releases are made only once the repo is public. PRs that touch the CLI
+# build the binaries, to prove they build.
+
+on:
+  pull_request:
+    paths: [cli/**, flake/parts/per-system.nix, flake.lock]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - run: nix build .#piste-release -L
+      - name: smoke (no Nix on PATH, empty HOME)
+        run: |
+          cp result/piste-linux-amd64 "$RUNNER_TEMP/piste"
+          env -i HOME="$RUNNER_TEMP" PATH=/usr/bin:/bin "$RUNNER_TEMP/piste" --version
+          (cd result && sha256sum -c SHA256SUMS)
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: piste-static
+          path: result/*
+          if-no-files-found: error
+
+  release:
+    if: github.event_name != 'pull_request' && !github.event.repository.private
+    runs-on: ubuntu-latest
+    concurrency:
+      group: piste-release
+      cancel-in-progress: false
+    permissions:
+      contents: write # create the tag and the release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0 # every tag, for changelog pending
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: The release to make, if any, and the commit that cut it
+        id: pending
+        run: |
+          set -euo pipefail
+          (cd cli && go build -buildvcs=false -o "$RUNNER_TEMP/changelog" ./cmd/changelog)
+          version=$("$RUNNER_TEMP/changelog" pending)
+          if [ -z "$version" ]; then
+            echo "Nothing to release: CHANGELOG.md's top release is tagged (or there is none)."
+            exit 0
+          fi
+          target=$("$RUNNER_TEMP/changelog" target "$version")
+          git -c advice.detachedHead=false checkout -q "$target"
+          echo "Releasing $version from $target (this run is on $GITHUB_SHA)."
+          {
+            echo "version=$version"
+            echo "target=$target"
+          } >> "$GITHUB_OUTPUT"
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+        if: steps.pending.outputs.version != ''
+      - if: steps.pending.outputs.version != ''
+        run: nix build .#piste-release -L
+      - name: smoke (no Nix on PATH, empty HOME; the binary is the release's version)
+        if: steps.pending.outputs.version != ''
+        env:
+          VERSION: ${{ steps.pending.outputs.version }}
+        run: |
+          set -euo pipefail
+          cp result/piste-linux-amd64 "$RUNNER_TEMP/piste"
+          env -i HOME="$RUNNER_TEMP" PATH=/usr/bin:/bin "$RUNNER_TEMP/piste" --version | tee "$RUNNER_TEMP/version.txt"
+          grep -F "${VERSION#v}" "$RUNNER_TEMP/version.txt"
+          (cd result && sha256sum -c SHA256SUMS)
+      - name: Tag and release
+        if: steps.pending.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.pending.outputs.version }}
+          TARGET: ${{ steps.pending.outputs.target }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/changelog" notes "$VERSION" > "$RUNNER_TEMP/notes.md"
+          gh release create "$VERSION" --repo "$GITHUB_REPOSITORY" \
+            --target "$TARGET" --title "piste $VERSION" --notes-file "$RUNNER_TEMP/notes.md"
+      # The newest release tag, not just this run's: a run whose tag step was
+      # skipped heals a stable that an earlier run's push left behind. A fast-
+      # forward only (no --force): a tag that isn't a descendant of stable is a
+      # red run to look at, not something to overwrite.
+      - name: stable follows the newest release
+        run: |
+          set -euo pipefail
+          git fetch --quiet --force --tags origin
+          # Exact vX.Y.Z only: a hand-pushed pre-release tag (v0.11.0-rc1) matches
+          # a glob and sorts above its final release, so stable would stick to it.
+          # This matches release.Latest, which skips pre-releases too.
+          latest=$(git tag --list 'v*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          if [ -z "$latest" ]; then
+            echo "No release tag yet: nothing for stable to follow."
+            exit 0
+          fi
+          commit=$(git rev-parse "refs/tags/$latest^{commit}")
+          echo "stable -> $latest ($commit)"
+          git push origin "$commit:refs/heads/stable"

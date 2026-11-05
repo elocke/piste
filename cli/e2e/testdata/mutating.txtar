@@ -1,0 +1,135 @@
+# The mutating-but-reversible commands: external argv (shims), exit codes,
+# messages, and the resulting file edits (overlays, package lists). Outputs
+# are frozen in $GOLDEN/mutating.
+
+chmod 0755 scenario.sh
+chmod 0755 fakebin/claude
+chmod 0755 fakebin/myeditor
+env USER=tester
+
+exec sh scenario.sh
+grep '^nix flake lock --update-input nixpkgs$' out/02-sync-input.calls
+[linux] grep '^nh clean user --keep-since 7d --keep 2 --dry$' out/06-clean-flags.calls
+[darwin] grep '^nh clean all --keep-since 7d --keep 2 --dry$' out/06-clean-flags.calls
+grep 'claude --add-dir .*/h/piste/overlays/personal --add-dir .*/h/piste/overlays/work --permission-mode auto -p hi' out/08-claude.out
+grep 'MD=1 cwd=.*/h/piste$' out/08-claude.out
+grep '^nix flake update home-manager --flake .*/h/piste/overlays/personal$' out/12-update-declared.calls
+grep 'is not one of .personal., .work.\.' out/26-add-scope-bad.err
+grep 'is not one of .personal., .work.\.' out/23-add-shared.err
+# The hash of the file fetchurl downloads, not of its unpacked contents.
+grep '^nix-prefetch-url --type sha256 https://dl/tool-2.0.0-linux.tar.gz$' out/16-overlays.calls
+grep 'version = "2.0.0"' out/16-overlays.file
+grep '"zen-mcp"' out/19-add-pnpm.file
+cmpworkdir $WORK/out $GOLDEN/mutating
+
+# pkg add's usage names its forms under pkg add only.
+exec piste pkg add --help
+stdout 'piste pkg add <name>'
+! stdout '\| add '
+
+# `add` clones overlays now: a package name gets the hint.
+! exec piste add jq
+stderr 'piste pkg add jq'
+
+-- fakebin/claude --
+#!/bin/sh
+echo "claude $* MD=$CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD cwd=$(pwd -P)"
+-- fakebin/myeditor --
+#!/bin/sh
+echo "edit $*"
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out" "$WORK/h" "$WORK/replies"; mkdir -p "$out" "$WORK/replies"
+# A piste checkout: the engine at $N = $H/piste (also ~/piste),
+# the overlays in $N/overlays.
+H=$WORK/h; N=$H/piste; P=$N/overlays/personal; V=$N/overlays/work
+mkdir -p "$P/modules" "$P/.git" "$N/modules" "$N/pkgs/overlays" "$N/.git" "$V"
+: > "$N/.piste"
+cp $WORK/fx/personal-flake.nix "$P/flake.nix"
+cp $WORK/fx/lock.json "$P/flake.lock"
+cp $WORK/fx/lock.json "$N/flake.lock"
+cp $WORK/fx/js-globals.nix "$P/modules/js-globals.nix"
+echo '{ }' > "$N/flake.nix"; echo '{ }' > "$V/flake.nix"
+cp $WORK/fx/packages-module.nix "$N/modules/packages-module.nix"
+cp $WORK/fx/30-tool.nix "$N/pkgs/overlays/30-tool.nix"
+export HOME=$H PATH=$WORK/fakebin:$PATH EDITOR=myeditor COLUMNS=500
+cd "$P"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err" <"$WORK/fx/stdin"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+run 01-sync sync
+run 02-sync-input sync -i nixpkgs
+SHIM_EXIT_NIX=4 run 03-sync-fail sync
+run 04-edit edit modules/js-globals.nix
+run 05-edit-missing edit nope.nix
+run 06-clean-flags clean --keep-since 7d --keep 2 --dry-run
+SHIM_EXIT_NH=2 run 07-clean-fail clean
+run 08-claude claude --permission-mode auto -p hi
+run 12-update-declared update home-manager
+SHIM_EXIT_NIX=1 run 13-update-fail update home-manager
+printf '{"tag": "v2.0.0", "assets": [{"name": "tool-2.0.0-linux.tar.gz", "url": "https://dl/tool-2.0.0-linux.tar.gz"}]}' > $WORK/replies/gh
+run 15-overlays-dry update-overlays --dry-run
+printf 'path is /nix/store/x\n0abc123hash\n' > $WORK/replies/nix-prefetch-url
+run 16-overlays update-overlays
+cp "$N/pkgs/overlays/30-tool.nix" "$out/16-overlays.file"
+cp $WORK/fx/30-tool.nix "$N/pkgs/overlays/30-tool.nix"
+run 17-update-overlays-input update overlays
+cp "$N/pkgs/overlays/30-tool.nix" "$out/17-update-overlays-input.file"
+printf '{"legacyPackages.x86_64-linux.jq": {"pname": "jq", "version": "1.7"}}' > $WORK/replies/nix
+run 18-add-pkg pkg add pkg jq
+run 19-add-pnpm pkg add pnpm zen-mcp
+cp "$P/modules/js-globals.nix" "$out/19-add-pnpm.file"
+run 20-add-pnpm-dup pkg add pnpm zen-mcp
+run 21-add-brew-linux pkg add brew wget
+run 22-add-auto pkg add jq
+run 23-add-shared pkg add --scope shared jq
+cd "$H"
+run 24-add-prompt pkg add --overlay personal pnpm left-pad
+cd "$P"
+run 25-add-scope pkg add --scope work pnpm x
+run 26-add-scope-bad pkg add --scope nope pnpm x
+exit 0
+-- fx/stdin --
+work
+-- fx/personal-flake.nix --
+{
+  inputs = {
+    piste.url = "github:elocke/piste/v0.1.0";
+    nixpkgs.follows = "piste/nixpkgs";
+    home-manager.url = "github:nix-community/home-manager";
+  };
+  outputs = { ... }: { homeConfigurations = { }; };
+}
+-- fx/lock.json --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs", "home-manager": "home-manager"}}, "nixpkgs": {"locked": {"lastModified": 1700000000}}, "home-manager": {"locked": {"lastModified": 1790000000}}}, "root": "root", "version": 7}
+-- fx/js-globals.nix --
+{ ... }:
+let
+  pnpmPackages = [
+    "typescript"
+  ];
+in { }
+-- fx/packages-module.nix --
+{ pkgs, ... }:
+{
+  cli = with pkgs; [
+    ripgrep
+  ];
+  allBrews = [ ];
+}
+-- fx/30-tool.nix --
+# @overlay-update github:o/tool
+final: prev: {
+  tool = prev.stdenv.mkDerivation rec {
+    pname = "tool";
+    version = "1.0.0";
+    src = prev.fetchurl {
+      asset = "tool-1.0.0-linux.tar.gz";
+      hash = "sha256-OLD";
+    };
+  };
+}

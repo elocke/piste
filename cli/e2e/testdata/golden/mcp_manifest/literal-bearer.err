@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 'bad': bearerEnv must be an env var NAME, not a value

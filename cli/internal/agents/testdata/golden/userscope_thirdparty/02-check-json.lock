@@ -1,0 +1,103 @@
+# fixture lock
+version = 1
+
+[[skill]]
+name    = "locked"
+source  = "github:o/skills"
+path    = "skills/locked"
+ref     = "v1.2"
+commit  = "5555555555555555555555555555555555555555"
+narHash = "sha256-LOCKED"
+fetched = "2026-09-01"
+
+[[skill]]
+name    = "stale"
+source  = "github:o/skills"
+path    = "skills/stale"
+commit  = "6666666666666666666666666666666666666666"
+narHash = "sha256-STALE"
+
+[[claude.marketplace]]
+name   = "good"
+source = "github:o/good"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+[[claude.marketplace]]
+name   = "drift"
+source = "github:o/drift"
+commit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+[[claude.marketplace]]
+name   = "src"
+source = "github:o/src"
+commit = "dddddddddddddddddddddddddddddddddddddddd"
+
+[[claude.plugin]]
+id           = "ok@good"
+version      = "1.0.0"
+gitCommitSha = "1111111111111111111111111111111111111111"
+
+[[claude.plugin]]
+id      = "old@good"
+version = "2.0.0"
+
+[[claude.plugin]]
+id      = "float@src"
+version = "1.0"
+
+[[claude.marketplace]]
+name   = "urlm"
+source = "url:https://raw.githubusercontent.com/o/cfg/main/plugins/.claude-plugin/marketplace.json"
+commit = "abababababababababababababababababababab"
+sha256 = "6d4cd970f37f999b6671c5b8cef59529d492bad1247501115b1fece228f22cec"
+
+[[claude.plugin]]
+id      = "quiet@good"
+version = "1.0.0"
+
+[[claude.plugin]]
+id      = "lsp@urlm"
+version = "unknown"
+
+[[claude.plugin]]
+id      = "pua@urlm"
+version = "unknown"
+
+[[claude.plugin]]
+id      = "gone@urlm"
+version = "unknown"
+
+[[codex.plugin]]
+id      = "github@openai-curated"
+version = "0.0.1"
+source  = "remote"
+
+[[mcp]]
+name      = "playwright"
+package   = "npm:@playwright/mcp"
+version   = "0.0.83"
+integrity = "sha512-PW"
+
+[[mcp]]
+name      = "uvtool"
+package   = "pypi:mcp-thing"
+version   = "1.2"
+integrity = "sha256:UV"
+
+[[hook]]
+name      = "hindsight"
+installer = "npm:@vectorize-io/hindsight-coding-agents"
+version   = "0.7.0"
+integrity = "sha512-HS"
+
+[[tool]]
+name      = "githits"
+source    = "npm:githits"
+version   = "0.6.6"
+integrity = "sha512-GH"
+
+[[tool]]
+name      = "drifty"
+source    = "npm:drifty"
+version   = "2.0.0"
+integrity = "sha512-DR"

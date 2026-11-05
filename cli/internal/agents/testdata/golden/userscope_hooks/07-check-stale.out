@@ -1,0 +1,11 @@
+stale      hooks              claude:piste-harness@piste-local  installed 0.0.0-aaaa, declared 0.0.0-bbbb; run `piste agents sync --user`
+conflict   hooks              claude:safety-hooks@cctools-plugins  replaced by piste-harness@piste-local; `claude plugin uninstall safety-hooks@cctools-plugins`
+conflict   hooks              claude:PreToolUse  /home/u/.claude/hooks/rtk-rewrite.sh (replaced by piste-harness@piste-local; remove from ~/.claude/settings.json)
+foreign    hooks              claude:Stop  node "/home/u/.hindsight/coding-agents/dist/claude-stop-hook.js" — ünïcode
+missing    hooks              codex:PreToolUse[Bash]  "$HOME/.local/share/piste-agents/hooks/bin/piste-guard"
+untrusted  hooks              codex:userPromptSubmit  node "/home/u/.hindsight/coding-agents/dist/codex-hook.js" (untrusted: review in codex /hooks)
+untrusted  hooks              codex:preToolUse  if [ -n "$PASEO_TERMINAL_ID" ]; then "${PASEO_HOOK_CLI:-paseo}" hooks codex PreToolUse; fi (untrusted: review in codex /hooks)
+ok         hooks-trust        codex:preToolUse  "$HOME/.local/share/piste-agents/hooks/bin/piste-guard"
+foreign    hooks              codex:preToolUse  "$HOME/.local/share/piste-agents/hooks/bin/rtk-rewrite"
+
+FAIL: 2 conflict, 2 foreign, 1 missing, 1 ok, 1 stale, 2 untrusted

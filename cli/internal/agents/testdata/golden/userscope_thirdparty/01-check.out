@@ -1,0 +1,39 @@
+ok         hooks              claude:piste-harness@piste-local  0.0.0-x
+policy     skill              blocked  source github:evil/x is not in [policy] allow
+policy     tool               weird  source brew:weird is not in [policy] allow
+drift      skill              blocked  declared but not in agents.lock (run piste agents update)
+drift      skill              stale  agents.lock entry is stale (source/path/ref changed)
+drift      skill              unlocked  declared but not in agents.lock (run piste agents update)
+drift      claude.marketplace drift  at cccccccccccc, lock bbbbbbbbbbbb
+ok         claude.marketplace good  aaaaaaaaaaaa (github:o/good)
+missing    claude.marketplace new  github:o/new
+floating   claude.marketplace src  at eeeeeeeeeeee, lock dddddddddddd (pin = source: added from its source, not mirrored)
+ok         claude.marketplace urlm  marketplace.json 6d4cd970f37f, lock 6d4cd970f37f @ abababababab (url source: added from its URL, not mirrored)
+ok         claude.marketplace piste-local  owned by piste (hook carrier; `piste agents check` hook rows)
+tolerated  claude.marketplace strayMarket  git:https://git.example/x.git
+floating   claude.plugin      float@src  0.9 (lock 1.0); marketplace pin = source
+missing    claude.plugin      gone@urlm  
+ok         claude.plugin      lsp@urlm  unknown
+missing    claude.plugin      missing@good  
+drift      claude.plugin      off@good  disabled; not in agents.lock
+ok         claude.plugin      ok@good  1.0.0 111111111111
+drift      claude.plugin      old@good  version 1.0.0 != lock 2.0.0
+drift      claude.plugin      pua@urlm  enabled (declared enabled = false)
+ok         claude.plugin      quiet@good  1.0.0
+tolerated  claude.plugin      keep@good  1
+ok         claude.plugin      piste-harness@piste-local  owned by piste (hook carrier; `piste agents check` hook rows)
+undeclared claude.plugin      stray@good  3.1
+drift      codex.plugin       canva@openai-curated  disabled
+missing    codex.plugin       figma@openai-curated  
+ok         codex.plugin       github@openai-curated  0.1.0 (remote)
+undeclared codex.plugin       extra@local  1.0
+ok         mcp                playwright  npm:@playwright/mcp@0.0.83
+ok         mcp                uvtool  pypi:mcp-thing@1.2
+ok         hook               hindsight  npm:@vectorize-io/hindsight-coding-agents@0.7.0
+tolerated  hook               paseo  follows its binary
+drift      tool               drifty  installed 1.0.0 != lock 2.0.0
+ok         tool               githits  npm:githits@0.6.6
+missing    tool               rtk  nix:piste#rtk not on PATH (piste switch)
+policy     tool               weird  source "brew:weird": tools come from nix: or npm:
+
+FAIL: 9 drift, 2 floating, 5 missing, 13 ok, 3 policy, 3 tolerated, 2 undeclared
