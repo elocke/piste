@@ -1585,6 +1585,10 @@
           ++ lib.optional (said { hosts = boxWith [ "sops" "nope" ]; }
               != "mkFlake: host t@box: unknown role sops (a role is base, dev, desktop, container or extras)\nmkFlake: host t@box: unknown role nope (a role is base, dev, desktop, container or extras)")
             "two bad roles: ${said { hosts = boxWith [ "sops" "nope" ]; }}"
+          # A role that isn't a string (a module, say) still gets its line.
+          ++ lib.optional (said { hosts = boxWith [ (x: x) ]; }
+              != "mkFlake: host t@box: unknown role <function> (a role is base, dev, desktop, container or extras)")
+            "a function role: ${said { hosts = boxWith [ (x: x) ]; }}"
           ++ lib.optional (said { hosts = boxWith [ "base" "dev" "desktop" "container" "extras" ]; } != "(no error)")
             "every role: ${said { hosts = boxWith [ "base" "dev" "desktop" "container" "extras" ]; }}";
         checksOf = o: lib.attrNames o.checks.x86_64-linux;

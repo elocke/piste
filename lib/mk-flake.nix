@@ -317,7 +317,7 @@ let
         )
         ++ lib.optional (known && isLinux system && (host.aliases or [ ]) != [ ])
           "host ${name}: aliases are for *-darwin hosts only"
-        ++ map (r: "host ${name}: unknown role ${if builtins.isString r then r else builtins.toJSON r} (a role is ${roleList})") (
+        ++ map (r: "host ${name}: unknown role ${if builtins.isString r then r else lib.generators.toPretty { multiline = false; } r} (a role is ${roleList})") (
           lib.filter (r: !(lib.elem r roleNames)) (host.roles or [ ])
         )
       ) hosts
