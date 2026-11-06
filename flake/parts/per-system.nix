@@ -1473,8 +1473,9 @@
     # zone checks that need none. Smaller calls, evaluated only: a Mac-only
     # overlay gets packages and checks for Linux and for an x86_64-darwin
     # host, an overlay package replaces the engine's of that name whole,
-    # attrsets do for the per-system arguments, and bad hosts or an overlay
-    # check named like a zone check throw.
+    # attrsets do for the per-system arguments, and bad hosts, a role that
+    # isn't one, an unknown devcontainer or bundle key, or an overlay check
+    # named like a zone check throw (the new refusals with their messages).
     checks.mkflake-fixture =
       let
         fx = ../../tests/fixtures/mkflake;
@@ -1558,6 +1559,34 @@
         acceptedHosts = lib.attrNames (lib.filterAttrs
           (_: hosts: !throws (lib.attrNames (mk { inherit hosts; }).darwinConfigurations))
           badHosts);
+        # Arguments mkFlake refuses: a role that isn't one (another name in
+        # homeManagerModules included) and a devcontainer or bundle key it
+        # doesn't read (devcontainer.overlays, which mkDevcontainer takes,
+        # included).
+        boxWith = roles: { "t@box" = bareBox // { inherit roles; }; };
+        badArgs = lib.genAttrs [ "vscode" "sops" "agents" "packages" "secrets" "nope" ] (r: { hosts = boxWith [ "dev" r ]; })
+          // {
+            mac-role.hosts.mac = { system = "aarch64-darwin"; roles = [ "packages" ]; };
+            devcontainer-overlays = { hosts = boxWith [ ]; devcontainer = { name = "x"; overlays = [ ]; }; };
+            bundle-zone = { hosts = boxWith [ ]; agents = ../../tests/fixtures/agents/agent; bundle = { presets = [ ]; zone = "agent"; }; };
+          };
+        acceptedArgs = lib.attrNames (lib.filterAttrs
+          (_: args: !throws (lib.attrNames (mk args).darwinConfigurations))
+          badArgs);
+        # What mkFlake says: its message, with the throw handed back as a value.
+        said = args: (import ../../lib/mk-flake.nix { piste = self; fail = msg: { error = msg; }; }
+          ({ inputs = { }; self = { }; user = "t"; zone = "agent"; } // args)).error or "(no error)";
+        saying = name: want: lib.optional (said badArgs.${name} != want) "${name}: ${said badArgs.${name}}";
+        wrongWords =
+          saying "vscode" "mkFlake: host t@box: unknown role vscode (a role is base, dev, desktop, container or extras)"
+          ++ saying "mac-role" "mkFlake: host mac: unknown role packages (a role is base, dev, desktop, container or extras)"
+          ++ saying "devcontainer-overlays" "mkFlake: devcontainer: unknown key overlays (devcontainer takes name, modules, extraSpecialArgs)"
+          ++ saying "bundle-zone" "mkFlake: bundle: unknown key zone (bundle takes presets)"
+          ++ lib.optional (said { hosts = boxWith [ "sops" "nope" ]; }
+              != "mkFlake: host t@box: unknown role sops (a role is base, dev, desktop, container or extras)\nmkFlake: host t@box: unknown role nope (a role is base, dev, desktop, container or extras)")
+            "two bad roles: ${said { hosts = boxWith [ "sops" "nope" ]; }}"
+          ++ lib.optional (said { hosts = boxWith [ "base" "dev" "desktop" "container" "extras" ]; } != "(no error)")
+            "every role: ${said { hosts = boxWith [ "base" "dev" "desktop" "container" "extras" ]; }}";
         checksOf = o: lib.attrNames o.checks.x86_64-linux;
         darwin = out.darwinConfigurations;
         box = out.homeConfigurations."t@box";
@@ -1607,6 +1636,10 @@
         "mkflake-fixture: an overlay check named zone-clean is accepted";
       assert lib.assertMsg (acceptedHosts == [ ])
         "mkflake-fixture: mkFlake accepts the bad hosts ${toString acceptedHosts}";
+      assert lib.assertMsg (acceptedArgs == [ ])
+        "mkflake-fixture: mkFlake accepts the bad arguments ${toString acceptedArgs}";
+      assert lib.assertMsg (wrongWords == [ ])
+        "mkflake-fixture: mkFlake's messages: ${lib.concatStringsSep "; " wrongWords}";
       assert lib.assertMsg (attrs.homeConfigurations."t@box".config.home.sessionVariables.PROBE == "probe")
         "mkflake-fixture: extraSpecialArgs as an attrset does not reach the home host";
       assert lib.assertMsg
