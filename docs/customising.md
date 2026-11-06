@@ -4,6 +4,8 @@
 - How do I drop something the engine installs or turns on?
 - What's in the extras pack, and how do I drop part of it?
 - How do I set any other home-manager or nix-darwin option?
+- When the engine, a layer and I set the same option, who wins?
+- How do I take over one of the engine's pieces with my own copy?
 - What does `piste.lib.mkFlake` take?
 - How do I add a second machine?
 - How do I write a `piste` plugin?
@@ -117,8 +119,10 @@ piste.roles.desktop.ghostty.enable = false;   # Ghostty's settings
 
 The toggles ([options.md](options.md)) are base's `shell` (zsh), `git`, `ssh`
 and `starship`, dev's `editor` (vim) and `tmux`, and desktop's `alacritty`
-and `ghostty`; one switched off forces its program off. A program with no
-toggle (direnv, gh), force off yourself, with `lib` in the file's arguments:
+and `ghostty`; one switched off turns the engine's piece off. (Today it also
+forces the program off with `lib.mkForce`, which a later release may drop, so
+don't build on it.) A program with no toggle (direnv, gh), force off
+yourself, with `lib` in the file's arguments:
 
 ```nix
 programs.direnv.enable = lib.mkForce false;
@@ -206,7 +210,8 @@ piste.roles.extras.macos.enable = false;     # hosts/jane-mac.nix, top level
 
 A part switched off sets nothing. To keep a part but not one thing in it,
 override that one option in your overlay (`lib.mkForce` where the part sets
-it plainly), or switch the part off and copy what you want from its file. On
+it plainly), or take the part over with a copy of your own ([Take over a
+piece](#take-over-a-piece)). On
 a team's layer, the layer's `piste.packages.casks.exclude` (the apps your
 company installs itself) applies to the pack's casks too.
 
@@ -251,6 +256,38 @@ Lists (packages, casks) add up instead: yours go beside the engine's. And
 attribute sets merge key by key, so only a key the engine also sets
 conflicts.
 
+### Who wins
+
+Every definition of an option has a priority, and the lowest number wins.
+Single values at the same priority conflict (the error above); lists and
+attribute sets at the same priority merge. A lower number replaces the rest
+outright, lists included: a list you set with `lib.mkForce` is the whole
+list. This table is where the engine is heading. Today differs where the
+last column says so.
+
+| Who | Priority | Written as | Today |
+|-----|----------|------------|-------|
+| the option's default | 1500 | the option's `default` | same |
+| the engine | 1000 | `lib.mkDefault` | the target. The macOS settings (`system.defaults.*`) are there; most of the core program modules (`programs.*`) still set plain values (100), so the same key in your overlay conflicts and needs `lib.mkForce` |
+| a pack or a team layer | 950 | `piste.lib.mkPackDefault` | same |
+| you | 100 | a plain value | same |
+| force | 50 | `lib.mkForce` | same, and it keeps working |
+
+Two more exceptions today: a role toggle switched off forces its program off
+with `lib.mkForce` ([Drop a default](#drop-a-default)), and the container role
+sets `programs.git.settings.commit.gpgsign` at 900, so neither a pack nor the
+engine's `mkDefault` beats it there.
+
+If you write a pack or a team layer:
+
+- Set scalars at your tier: `inputs.piste.lib.mkPackDefault value`, from your
+  own flake's `piste` input. A person's plain value then wins over yours, and
+  yours over the engine's `mkDefault`.
+- Leave lists plain, so a person's entries go beside yours (a list at 950
+  would lose to theirs whole).
+- Never `mkDefault` (or `mkPackDefault`) a whole attribute set: a person who
+  sets one key of it plainly would drop every other key you set.
+
 ### SSH
 
 piste owns `~/.ssh/config`: a switch replaces it, so an edit to it doesn't
@@ -274,6 +311,73 @@ system.defaults.dock.persistent-apps = [
   "/Applications/Ghostty.app"
 ];
 system.defaults.dock.persistent-others = [ "/Users/jane/Downloads" ];
+```
+
+## Take over a piece
+
+When a toggle or a few overrides aren't enough, take one of the engine's
+pieces over: turn it off by its module key and import your own copy. Each
+piece has a key, and it is promised
+([upgrading.md](upgrading.md#what-a-release-promises)); its file's path isn't.
+
+| Pack | Pieces | Key |
+|------|--------|-----|
+| core | `shell`, `git`, `ssh`, `starship`, `herdr`, `editor`, `tmux`, `uv`, `zellij`, `alacritty`, `ghostty`, `vscode` (in `modules/programs/`) | `pack:core/<piece>` |
+| extras | `shell`, `editor`, `tmux`, `ghostty`, `casks`, `macos` (in `modules/extras/`) | `pack:extras/<piece>` |
+
+To take over the prompt, copy the engine's file into your overlay and stage
+it:
+
+```bash
+mkdir -p ~/piste/overlays/mine/modules
+cp ~/piste/modules/programs/starship.nix ~/piste/overlays/mine/modules/
+git -C ~/piste/overlays/mine add modules/starship.nix
+```
+
+Change the copy's key line from `key = "pack:core/starship";` to
+`key = "local:core/starship";`. Then, in your home (`home.nix`):
+
+```nix
+disabledModules = [ { key = "pack:core/starship"; } ];
+imports = [ ./modules/starship.nix ];
+```
+
+If the file already has an `imports` list, add the copy to it: a second
+`imports =` in one file is an error. Edit the copy as you like. Mind these:
+
+- **Use the attribute-set form.** `disabledModules = [ "pack:core/starship" ];`
+  is read as a path under nixpkgs' modules and silently matches nothing: the
+  engine's piece stays on. A path to the engine's file matches nothing either.
+- **Change the key.** A copy that keeps `pack:core/starship` is disabled too,
+  and you end up with neither.
+- **Keep the copy's option declarations.** `herdr` declares
+  `piste.programs.herdr.*`, `zellij` declares `piste.programs.zellij.enable`
+  and `.timezone`, `vscode` declares `piste.programs.vscode.*`, and each
+  extras part declares its `piste.roles.extras.<part>.enable` (`tmux` also
+  `resurrectExtraConfig`). Other modules set some of them: the desktop role,
+  which every Mac has, and the container role set
+  `piste.programs.zellij.enable`. Turn such a piece off without a copy that
+  declares them, and any setting of them fails with "option does not exist".
+  The other pieces declare no options of their own (the
+  `piste.roles.<role>.<toggle>` options live in the role files), so turning
+  them off is always safe.
+- **Bring the files it imports.** `herdr.nix` imports
+  `./herdr-app-settings.nix`: copy it beside your `herdr.nix`.
+- **Order can move.** Your copy comes after the engine's modules, so its list
+  entries and lines of text land after the engine's other ones of the same
+  priority (`nano` later in `home.packages`, extras `shell`'s init lines after
+  zellij's). The items are the same.
+
+On Linux it all goes in your home. On a Mac, a home piece (every `core` piece,
+and extras `shell`, `editor`, `tmux` and `ghostty`) goes in the home side: in
+`home.nix`, or inside `home-manager.users.${user} = { … };` in the Mac's host
+file. Extras `casks` and `macos` are nix-darwin modules, so they go at the top
+level of the Mac's host file, beside `piste.packages.*`:
+
+```nix
+# hosts/jane-mac.nix, top level
+disabledModules = [ { key = "pack:extras/casks"; } ];
+imports = [ ../modules/casks.nix ];   # its key changed to local:extras/casks
 ```
 
 ## `mkFlake`'s arguments
@@ -302,6 +406,20 @@ A host is `{ system; modules ? [ ]; roles ? [ ]; overlays ? [ ]; aliases ? [ ]; 
   always has `desktop`), and on either, `extras` ([the extras
   pack](#the-extras-pack)); `overlays`: nixpkgs overlays for it; `aliases`: on a
   Mac, other hostnames for the same machine.
+
+`mkFlake` checks what it's given and stops with one line per mistake, each
+starting `mkFlake:`. Among them:
+
+- a host key it doesn't know: `mkFlake: host jane-mac: unknown key role (a
+  host takes system, modules, overlays, roles, aliases)`;
+- a role that isn't one: `mkFlake: host jane@devbox: unknown role vscode (a
+  role is base, dev, desktop, container or extras)`. The names of
+  `homeManagerModules` that aren't roles (`vscode`, `sops`, `agents`,
+  `packages`, `secrets`) are refused; import such a module in your home
+  instead (`imports = [ piste.homeManagerModules.vscode ];`);
+- a key `devcontainer` or `bundle` doesn't take: `mkFlake: devcontainer:
+  unknown key overlays (devcontainer takes name, modules, extraSpecialArgs)`,
+  `mkFlake: bundle: unknown key zone (bundle takes presets)`.
 
 `mkFlake` wires every host, so its modules needn't: the home gets
 `piste.homeManagerModules.sops` (sops-nix's module, re-exported) and

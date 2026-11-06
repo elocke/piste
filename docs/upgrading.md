@@ -4,6 +4,7 @@
 - What changed, and is there anything I must change in my overlay?
 - How do I go back?
 - What does a release promise to keep working?
+- Which names are reserved for the engine?
 - How often are there releases?
 - What does the line about a new release after `piste switch` mean?
 
@@ -108,28 +109,79 @@ Promised:
 
 - every option in [options.md](options.md), `mkFlake`'s arguments and host keys
   ([customising.md](customising.md#mkflakes-arguments)), and every command and
-  flag in [commands.md](commands.md);
+  flag in [commands.md](commands.md), except the layers preview's
+  (`piste init --layer`, and `piste setup` given a layer's URL);
+- the `lib` functions these docs name, `piste.lib.mkPackDefault` (priority
+  950, [customising.md](customising.md#who-wins)) among them;
+- the module keys of the engine's pieces, `pack:core/<piece>` and
+  `pack:extras/<piece>`, which `disabledModules` takes
+  ([customising.md](customising.md#take-over-a-piece));
 - the `PISTE_*` variables these docs name (`PISTE_AI`, `PISTE_FLAKE`,
   `PISTE_AGENTS_HOME` and `PISTE_AGENTS_ROOTS`);
-- the files piste reads: `agents.toml`, `agents.lock` (version 1),
-  `piste-layer.toml` and the leak-marker lists;
+- the files piste reads: `agents.toml`, `agents.lock` (version 1) and the
+  leak-marker lists;
 - the plugin contract (`piste-<name>` on your PATH, run with `PISTE_FLAKE`);
 - the names of the engine inputs an overlay can follow: `nixpkgs`,
   `home-manager`, `darwin` and `sops-nix`;
-- the `zone-*` prefix of the checks `mkFlake` adds, reserved for the engine.
+- the `zone-*` prefix of the checks `mkFlake` adds, reserved for the engine,
+  and the other [reserved names](#reserved-names).
 
 Not promised:
 
 - hidden commands (they're not in `piste --help`) and undocumented `lib`
   functions;
+- where a piece's file is: the paths under `modules/`, which modules a role
+  imports, and what `darwinModules.platform` imports (today it gives every
+  Mac the desktop role). Reach a piece by its key, not its path;
 - the package attributes in `overlays.shared`, beyond what nixpkgs has;
-- team layers, which are a preview in v0.1.0 and may change in a minor release;
+- team layers, which are a preview in v0.1.0 and may change in a minor release:
+  `piste-layer.toml`, a layer's `pisteLayer` flake output, `piste init
+  --layer` and `piste setup <layer url>`. Layers are expected to become packs
+  ([design/packs.md](design/packs.md));
 - what upstream does: nixpkgs, Homebrew, Claude Code and the other tools move
   with each release, and so does what they install.
 
 After v0.1.0, a renamed option keeps working for a release or more
 (`mkRenamedOptionModule`), and a renamed command keeps its old name with a
 deprecation notice.
+
+## Reserved names
+
+piste is heading towards packs: shareable bundles of pieces, of which the
+engine's own defaults (`core`) and the extras pack (`extras`) are the first
+two. [design/packs.md](design/packs.md) says where it's going. These names are
+kept for that work. Most aren't used yet. Don't use them in your overlay, a
+layer or a plugin: when the engine takes one, yours stops working or clashes
+with it, and no release counts that as a break.
+
+- **Option prefixes:** `piste.packs.*` (each pack owns `piste.packs.<its
+  name>.*`), `piste.managed.*` and `piste.internal.*`.
+- **Flake outputs:** `pistePacks` and `pisteGroups`.
+- **`mkFlake`:** the argument names `packs`, `groups` and `managed`, and the
+  host key `packs`.
+- **`lib` names:** `mkPackChecks` and `evalManaged`. (`mkPackDefault` exists
+  and is promised, above.)
+- **Module-key prefixes:** `pack:` and `local:`. The engine's pieces are
+  `pack:core/<piece>` and `pack:extras/<piece>`; `local:` is for your own
+  copy of one ([customising.md](customising.md#take-over-a-piece)).
+- **Checks `mkFlake` adds:** the prefixes `pack-*`, `managed-*` and
+  `group-*`, beside `zone-*`. An overlay check with one of those names would
+  clash with the engine's once it adds it.
+- **Commands and plugins:** `pack`, `eject`, `managed` and `group`. A plugin
+  never shadows a built-in command, so a `piste-pack` of yours would stop
+  running the day `piste pack` lands.
+- **Pack names:** `core` and `extras`.
+- **Agent sources:** the source-name prefix `pack-` (beside `<zone>-agents`
+  and `piste-agents`), and the `pack:` scheme in the `allow` entries of
+  `agents.toml`'s `[policy]`.
+- **Claude Code's `managed-settings.d`:** the drop-in `90-managed.json`.
+  Drop-ins merge in alphabetical order and, for a single value, the later file
+  wins. `50-agents.json` is already the container bundle's
+  ([devcontainer.md](devcontainer.md)).
+
+`managed` is the word for settings a machine's user can't change, as in
+Claude Code's managed settings. `policy` keeps the one meaning it has today,
+`agents.toml`'s `[policy]` ([agents-and-mcp.md](agents-and-mcp.md)).
 
 ## Going back
 

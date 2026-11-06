@@ -19,6 +19,14 @@ branch is up to date with `main` when it merges: a cut that brings other
 changes in with it isn't released.
 
 ## Unreleased
+- Every engine piece has a module key, `pack:core/<piece>` (shell, git, ssh, starship, herdr, editor, tmux, uv, zellij, alacritty, ghostty, vscode) or `pack:extras/<piece>` (shell, editor, tmux, ghostty, casks, macos), and the keys are promised; file paths under `modules/` aren't. To take a piece over, turn it off with `disabledModules = [ { key = "pack:core/starship"; } ];` (the attribute-set form: a bare string matches nothing) and import your own copy with its key changed to `local:core/starship`. [docs/customising.md](https://github.com/elocke/piste/blob/main/docs/customising.md#take-over-a-piece) has the recipe and what a copy must keep.
+- `piste.lib.mkPackDefault` (`lib.mkOverride 950`): a pack's or a team layer's default, which wins over the engine's `mkDefault` and loses to your plain value. docs/customising.md's "Who wins" table shows the priorities, where the engine is heading and where it is today.
+- Reserved names: option prefixes `piste.packs.*`, `piste.managed.*` and `piste.internal.*`, the flake outputs `pistePacks` and `pisteGroups`, check prefixes `pack-*`, `managed-*` and `group-*`, the commands and plugins `pack`, `eject`, `managed` and `group`, and the rest listed in [docs/upgrading.md](https://github.com/elocke/piste/blob/main/docs/upgrading.md#reserved-names). Don't use them in an overlay, a layer or a plugin.
+- Team layers' whole surface is the preview, outside what a release promises: `piste-layer.toml`, the `pisteLayer` flake output, `piste init --layer` and `piste setup <layer url>`. Layers are expected to become packs. A layer's scalars use `piste.lib.mkPackDefault` (950), not `lib.mkDefault`.
+
+### Upgrading
+- `mkFlake` now refuses a host role other than `base`, `dev`, `desktop`, `container` and `extras`. A role named after another of `piste.homeManagerModules` (`vscode`, `sops`, `agents`, `packages`, `secrets`) used to import that module; now it fails with `mkFlake: host jane@devbox: unknown role vscode (a role is base, dev, desktop, container or extras)`. Import the module in your home instead (`imports = [ piste.homeManagerModules.vscode ];`), or drop it.
+- `mkFlake` now refuses a key `devcontainer` or `bundle` doesn't take, which it used to ignore: `devcontainer` takes `name`, `modules` and `extraSpecialArgs`, `bundle` takes `presets`. An overlay that passed another (`devcontainer.overlays`, say) gets an error naming it; take the key out.
 
 ## v0.1.0 (2026-11-05)
 - First public release. piste sets up Macs and Linux machines from one Nix configuration, and its `piste` command keeps them that way. Start with the [README](https://github.com/elocke/piste#readme).
