@@ -8,6 +8,9 @@ let
   hasKey = cfg.signing.key != null || (user.signingkey or user.signingKey or null) != null;
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/git";
+
   # Sign commits by default only with a key to sign with: without one, a
   # newcomer's first `git commit` fails ("No secret key"). In iniContent, not
   # settings, so reading settings above can't loop; a person's own

@@ -17,6 +17,9 @@ let
   };
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/herdr";
+
   options.piste.programs.herdr = {
     enable = lib.mkEnableOption "herdr's settings: the Herdr app's telemetry off unless set";
     app.settings = lib.mkOption {

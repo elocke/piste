@@ -13,6 +13,9 @@ let
   desktop = config.piste.roles.desktop.ghostty.enable or false;
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/ghostty";
+
   options.piste.roles.extras.ghostty.enable =
     (lib.mkEnableOption "the extras pack's Ghostty settings") // { default = true; };
 

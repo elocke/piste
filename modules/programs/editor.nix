@@ -1,6 +1,9 @@
 { config, pkgs, lib, ... }:
 
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/editor";
+
   # Nano - primary editor (no HM module; manage nanorc directly)
   home.packages = [ pkgs.nano ];
   home.file.".nanorc".text = ''

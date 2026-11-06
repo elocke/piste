@@ -1,6 +1,9 @@
 { ... }:
 
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/uv";
+
   programs.uv = {
     enable = true;
     # uv itself ships via piste.packages (packages-module.nix); this module

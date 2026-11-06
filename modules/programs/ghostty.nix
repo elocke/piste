@@ -1,6 +1,9 @@
 { config, pkgs, lib, ... }:
 
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/ghostty";
+
   xdg.configFile."ghostty/config".text = ''
     # Font with Symbols Nerd Font fallback for extended icons
     font-family = Hack Nerd Font

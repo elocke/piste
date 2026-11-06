@@ -83,6 +83,9 @@ let
   ];
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/vscode";
+
   options.piste.programs.vscode = {
     enable = lib.mkEnableOption "VS Code with shared settings, keybindings, and core extensions";
 

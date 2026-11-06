@@ -7,6 +7,9 @@ let
   zellijPlugins = pkgs.zellij-plugins;
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/zellij";
+
   options.piste.programs.zellij.enable =
     lib.mkEnableOption "zellij config (keybindings, zjstatus/zellaude layout, opt-in autostart)";
 

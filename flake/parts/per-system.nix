@@ -718,6 +718,192 @@
         linux = builtins.unsafeDiscardStringContext (homes.linux.build homes.linux.names).drvPath;
         darwin = builtins.unsafeDiscardStringContext (homes.darwin.build homes.darwin.names).drvPath;
       } "touch $out";
+    # Every engine opinion file has a stable key, pack:core/<piece> or
+    # pack:extras/<piece>, the handle an overlay takes a piece over with:
+    # disabledModules = [ { key = K; } ] and its own copy of the file under
+    # another key. For each key, on the starters' hosts (roles dev + extras on
+    # Linux, extras on the Mac, with the pieces' own switches on):
+    #   - a round trip: K disabled and the engine's own file imported again
+    #     under a local key builds the same home or system as the engine's
+    #     piece (a Mac's home pieces are disabled inside its home, the extras
+    #     Mac parts casks and macos at the system's top level);
+    #   - K disabled alone drops the piece's program, and the options it
+    #     declares, on a host that sets none of them. A piece whose options
+    #     the host does set (herdr, zellij, vscode) drops its program there
+    #     too once those settings are sunk: a bare disable would leave them
+    #     undeclared;
+    #   - disabledModules' string form ("pack:core/starship", read as a path
+    #     under modulesPath) and the file's path match nothing.
+    checks.piece-keys =
+      let
+        fx = ../../tests/fixtures/template;
+        mod = ../../modules;
+        out = self.lib.mkFlake {
+          inputs = { };
+          self = { };
+          user = "jane";
+          zone = "personal";
+          hosts = {
+            "jane@devbox" = {
+              system = "x86_64-linux";
+              roles = [ "dev" "extras" ];
+              overlays = [ self.overlays.vscode ];
+              modules = [ (fx + "/linux/hosts/devbox.nix") self.homeManagerModules.vscode ];
+            };
+            jane-mac = { system = "aarch64-darwin"; roles = [ "extras" ]; modules = [ (fx + "/darwin/hosts/jane-mac.nix") ]; };
+          };
+        };
+        # Each host as the starter has it (plain) and with the pieces' own
+        # switches on (on): the round trips run on `on`, so they cover what
+        # those pieces do.
+        evals = {
+          linux = rec {
+            plain = out.homeConfigurations."jane@devbox";
+            on = plain.extendModules {
+              modules = [ { piste.programs = { vscode.enable = true; zellij.enable = true; herdr.enable = true; }; } ];
+            };
+            with' = base: _side: ms: base.extendModules { modules = ms; };
+            home = e: e.config;
+            sys = e: e.config;
+            drv = e: e.activationPackage.drvPath;
+          };
+          mac = rec {
+            plain = out.darwinConfigurations.jane-mac;
+            on = plain.extendModules { modules = [ { home-manager.users.jane.piste.programs.herdr.enable = true; } ]; };
+            with' = base: side: ms: base.extendModules {
+              modules = if side == "system" then ms else [ { home-manager.users.jane.imports = ms; } ];
+            };
+            home = e: e.config.home-manager.users.jane;
+            sys = e: e.config;
+            drv = e: e.system.drvPath;
+          };
+        };
+        in' = lib.flip lib.hasInfix;
+        # key: the file, the host it's tried on, its side (home, else
+        # system), its program (has, read on that side's config), the
+        # options it declares (opts, a path under config) and the options
+        # whose order a copy changes (reorders): a list or lines option's
+        # definitions of equal priority merge in module order, and an
+        # overlay's copy comes after the engine's modules (the editor's nano
+        # after the other packages, extras' shell lines after zellij's, both
+        # mkAfter).
+        pieces = {
+          "pack:core/shell" = { file = mod + "/programs/shell.nix"; on = "linux"; has = h: h.programs.zsh.enable; };
+          "pack:core/git" = { file = mod + "/programs/git.nix"; on = "linux"; has = h: h.programs.git.enable; };
+          "pack:core/ssh" = { file = mod + "/programs/ssh.nix"; on = "linux"; has = h: h.programs.ssh.enable; };
+          "pack:core/starship" = { file = mod + "/programs/starship.nix"; on = "linux"; has = h: h.programs.starship.enable; };
+          "pack:core/editor" = {
+            file = mod + "/programs/editor.nix"; on = "linux";
+            has = h: h.programs.vim.enable && h.home.file ? ".nanorc";
+            reorders = [ [ "home" "packages" ] ];
+          };
+          "pack:core/tmux" = { file = mod + "/programs/tmux.nix"; on = "linux"; has = h: h.programs.tmux.enable; };
+          "pack:core/uv" = { file = mod + "/programs/uv.nix"; on = "linux"; has = h: h.programs.uv.enable; };
+          "pack:core/zellij" = {
+            file = mod + "/programs/zellij.nix"; on = "linux";
+            has = h: h.xdg.configFile ? "zellij/config.kdl";
+            opts = [ "piste" "programs" "zellij" ];
+          };
+          "pack:core/vscode" = {
+            file = mod + "/programs/vscode.nix"; on = "linux";
+            has = h: h.programs.vscode.enable;
+            opts = [ "piste" "programs" "vscode" ];
+          };
+          "pack:core/herdr" = {
+            file = mod + "/programs/herdr.nix"; on = "mac";
+            has = h: h.home.activation ? herdrAppSettings;
+            opts = [ "piste" "programs" "herdr" ];
+          };
+          "pack:core/alacritty" = { file = mod + "/programs/alacritty.nix"; on = "mac"; has = h: h.programs.alacritty.enable; };
+          "pack:core/ghostty" = {
+            file = mod + "/programs/ghostty.nix"; on = "mac";
+            has = h: in' (h.xdg.configFile."ghostty/config".text or "") "font-family = Hack Nerd Font";
+          };
+          "pack:extras/shell" = {
+            file = mod + "/extras/shell.nix"; on = "linux";
+            has = h: in' h.programs.zsh.initContent "YSU_MODE=ALL";
+            opts = [ "piste" "roles" "extras" "shell" ];
+            reorders = [ [ "programs" "zsh" "initContent" ] ];
+          };
+          "pack:extras/editor" = {
+            file = mod + "/extras/editor.nix"; on = "linux";
+            has = h: h.programs.git.settings.core ? editor;
+            opts = [ "piste" "roles" "extras" "editor" ];
+          };
+          "pack:extras/tmux" = {
+            file = mod + "/extras/tmux.nix"; on = "linux";
+            has = h: h.programs.tmux.prefix == "C-x";
+            opts = [ "piste" "roles" "extras" "tmux" ];
+          };
+          "pack:extras/ghostty" = {
+            file = mod + "/extras/ghostty.nix"; on = "mac";
+            has = h: in' (h.xdg.configFile."ghostty/config".text or "") "clipboard-read = allow";
+            opts = [ "piste" "roles" "extras" "ghostty" ];
+          };
+          "pack:extras/casks" = {
+            file = mod + "/extras/casks.nix"; on = "mac"; side = "system";
+            has = s: lib.elem "firefox" s.piste.packages.resolved.casks;
+            opts = [ "piste" "roles" "extras" "casks" ];
+          };
+          "pack:extras/macos" = {
+            file = mod + "/extras/macos.nix"; on = "mac"; side = "system";
+            has = s: s.system.defaults.trackpad.TrackpadThreeFingerDrag == true;
+            opts = [ "piste" "roles" "extras" "macos" ];
+          };
+        };
+        sideOf = p: p.side or "home";
+        # The engine's file again under a key of its own, as an overlay's copy
+        # of it would be.
+        copy = k: file:
+          let
+            m = import file;
+            local = { key = "local:" + lib.removePrefix "pack:" k; };
+          in
+          if lib.isFunction m then lib.setFunctionArgs (a: m a // local) (lib.functionArgs m) else m // local;
+        disable = k: { disabledModules = [ { key = k; } ]; };
+        # A sink for the settings a disabled piece's options are left with.
+        sink = p: lib.setAttrByPath ([ "options" ] ++ p.opts) (lib.mkSinkUndeclaredOptions { });
+        problems = lib.concatLists (lib.mapAttrsToList (k: p:
+          let
+            e = evals.${p.on};
+            with' = base: ms: e.with' base (sideOf p) ms;
+            read = x: if sideOf p == "system" then e.sys x else e.home x;
+            has = x: p.has (read x);
+            declares = x: lib.hasAttrByPath p.opts (read x);
+            drv = x: builtins.unsafeDiscardStringContext (e.drv x);
+            # A test that fails to evaluate fails (with the key's name, not
+            # the first error's).
+            holds = t: let r = builtins.tryEval t; in r.success && r.value;
+            took = with' e.on [ (disable k) (copy k p.file) ];
+            dropped = with' e.plain [ (disable k) ];
+            sunk = with' e.on [ (disable k) (sink p) ];
+            # A reordered option: the copy's value is the engine's, reordered
+            # (the same lines or packages), and with each such option pinned
+            # to the engine's value, the two builds are the same.
+            reorders = p.reorders or [ ];
+            value = o: x: lib.getAttrFromPath o (read x);
+            items = v: lib.sort lib.lessThan
+              (if lib.isString v then lib.splitString "\n" v else map (i: builtins.unsafeDiscardStringContext (toString i)) v);
+            pins = map (o: lib.setAttrByPath o (lib.mkForce (value o e.on))) reorders;
+            same =
+              lib.all (o: items (value o took) == items (value o e.on)) reorders
+              && drv (with' e.on ([ (disable k) (copy k p.file) ] ++ pins)) == drv (if reorders == [ ] then e.on else with' e.on pins);
+          in
+          lib.optional (!holds (has e.on)) "${k}: the ${p.on} host doesn't have the piece's program"
+          ++ lib.optional (!holds same) "${k}: taken over with the engine's own file, the ${p.on} build differs or fails"
+          ++ lib.optional (!holds (!has dropped)) "${k}: disabled, its program is still on (or the host fails)"
+          ++ lib.optional (p ? opts && !holds (!declares dropped)) "${k}: disabled, its options are still declared"
+          ++ lib.optional (p ? opts && !holds (!has sunk)) "${k}: disabled with its settings sunk, its program is still on (or the host fails)"
+        ) pieces);
+        # The key is the handle: the string form and the file's path are not.
+        starshipWith = ms: (evals.linux.plain.extendModules { modules = ms; }).config.programs.starship.enable;
+      in
+      assert lib.assertMsg (problems == [ ]) "piece-keys: ${lib.concatStringsSep "; " problems}";
+      assert lib.assertMsg (starshipWith [ { disabledModules = [ "pack:core/starship" ]; } ])
+        "piece-keys: disabledModules = [ \"pack:core/starship\" ] (a string, not { key = ...; }) disables starship";
+      assert lib.assertMsg (starshipWith [ { disabledModules = [ (mod + "/programs/starship.nix") ]; } ])
+        "piece-keys: disabledModules with starship.nix's path disables it (the key is the handle, not the path)";
+      pkgs.runCommand "check-piece-keys" { } "touch $out";
     # zjstatus's clock can't read the machine's zone, so the zone is
     # piste.programs.zellij.timezone: UTC unless an overlay sets one.
     checks.zellij-timezone =

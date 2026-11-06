@@ -31,6 +31,9 @@ let
   '';
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/shell";
+
   # Session variables
   home.sessionVariables = {
     # nano: it is installed (programs/editor.nix), sops and `piste edit` use
