@@ -119,10 +119,13 @@ piste.roles.desktop.ghostty.enable = false;   # Ghostty's settings
 
 The toggles ([options.md](options.md)) are base's `shell` (zsh), `git`, `ssh`
 and `starship`, dev's `editor` (vim) and `tmux`, and desktop's `alacritty`
-and `ghostty`; one switched off turns the engine's piece off. (Today it also
-forces the program off with `lib.mkForce`, which a later release may drop, so
-don't build on it.) A program with no toggle (direnv, gh), force off
-yourself, with `lib` in the file's arguments:
+and `ghostty`; one switched off turns its program off. The rest of the
+engine's piece stays: the editor piece's nano and `~/.nanorc`, the shell
+piece's direnv and session variables. To drop a whole piece, turn its key off
+([Take over a piece](#take-over-a-piece)). How a toggle does it (today
+`lib.mkForce` on the program's `enable`) isn't promised, so don't build on it.
+A program with no toggle (direnv, gh), force off yourself, with `lib` in the
+file's arguments:
 
 ```nix
 programs.direnv.enable = lib.mkForce false;
@@ -269,7 +272,7 @@ last column says so.
 |-----|----------|------------|-------|
 | the option's default | 1500 | the option's `default` | same |
 | the engine | 1000 | `lib.mkDefault` | the target. The macOS settings (`system.defaults.*`) are there; most of the core program modules (`programs.*`) still set plain values (100), so the same key in your overlay conflicts and needs `lib.mkForce` |
-| a pack or a team layer | 950 | `piste.lib.mkPackDefault` | same |
+| a pack or a team layer | 950 | `piste.lib.mkPackDefault` | for team layers. The engine's own extras pack still sets `lib.mkDefault` (1000) or plain values, like the core modules |
 | you | 100 | a plain value | same |
 | force | 50 | `lib.mkForce` | same, and it keeps working |
 
@@ -285,8 +288,10 @@ If you write a pack or a team layer:
   yours over the engine's `mkDefault`.
 - Leave lists plain, so a person's entries go beside yours (a list at 950
   would lose to theirs whole).
-- Never `mkDefault` (or `mkPackDefault`) a whole attribute set: a person who
-  sets one key of it plainly would drop every other key you set.
+- Never `mkDefault` (or `mkPackDefault`) a whole free-form attribute set (an
+  `attrsOf` option such as `programs.starship.settings`): a person who sets
+  one key of it plainly replaces the whole set, every key you set included.
+  Set each key at your tier instead.
 
 ### SSH
 

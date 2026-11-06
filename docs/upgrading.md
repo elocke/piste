@@ -147,7 +147,7 @@ deprecation notice.
 
 ## Reserved names
 
-piste is heading towards packs: shareable bundles of pieces, of which the
+piste is heading towards packs: shareable sets of pieces, of which the
 engine's own defaults (`core`) and the extras pack (`extras`) are the first
 two. [design/packs.md](design/packs.md) says where it's going. These names are
 kept for that work. Most aren't used yet. Don't use them in your overlay, a
@@ -167,12 +167,14 @@ with it, and no release counts that as a break.
 - **Checks `mkFlake` adds:** the prefixes `pack-*`, `managed-*` and
   `group-*`, beside `zone-*`. An overlay check with one of those names would
   clash with the engine's once it adds it.
-- **Commands and plugins:** `pack`, `eject`, `managed` and `group`. A plugin
-  never shadows a built-in command, so a `piste-pack` of yours would stop
-  running the day `piste pack` lands.
+- **Commands and plugins:** `pack`, `eject`, `managed` and `group`, and the
+  plugins `piste-managed-<name>`, which `piste managed` will hand a target
+  to. A plugin never shadows a built-in command, so a `piste-pack` of yours
+  would stop running the day `piste pack` lands.
 - **Pack names:** `core` and `extras`.
 - **Agent sources:** the source-name prefix `pack-` (beside `<zone>-agents`
-  and `piste-agents`), and the `pack:` scheme in the `allow` entries of
+  and `piste-agents`), the zone name `pack` (its `pack-agents` source would
+  look like a pack's), and the `pack:` scheme in the `allow` entries of
   `agents.toml`'s `[policy]`.
 - **Claude Code's `managed-settings.d`:** the drop-in `90-managed.json`.
   Drop-ins merge in alphabetical order and, for a single value, the later file
