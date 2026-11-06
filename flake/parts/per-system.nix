@@ -233,6 +233,23 @@
       assert lib.assertMsg (!(lib.any (d: lib.getName d == "openssh") piste.runtimeDeps))
         "piste-names: openssh is back in runtimeDeps";
       pkgs.runCommand "check-piste-names" { } "touch $out";
+    # piste.lib.mkPackDefault, a pack's (and a team layer's) priority: 950,
+    # between a person's plain value (100), which wins over it, and the
+    # engine's mkDefault (1000), which it wins over.
+    checks.pack-default =
+      let
+        inherit (self.lib) mkPackDefault;
+        value = defs: (lib.evalModules {
+          modules = [ { options.v = lib.mkOption { type = lib.types.str; }; } ] ++ map (d: { v = d; }) defs;
+        }).config.v;
+      in
+      assert lib.assertMsg ((mkPackDefault 1).priority == 950)
+        "pack-default: mkPackDefault's priority is ${toString (mkPackDefault 1).priority}, not 950";
+      assert lib.assertMsg (value [ (lib.mkDefault "engine") (mkPackDefault "pack") ] == "pack")
+        "pack-default: a pack's value doesn't win over the engine's mkDefault";
+      assert lib.assertMsg (value [ (mkPackDefault "pack") "mine" ] == "mine")
+        "pack-default: a person's plain value doesn't win over a pack's";
+      pkgs.runCommand "check-pack-default" { } "touch $out";
     # templates.default, instantiated: the committed instances
     # (what `piste init` renders for fixed answers; cli/internal/overlay's
     # TestRenderInstances keeps them equal) evaluate as overlays against this
@@ -1157,14 +1174,17 @@
         "layer-instance: jane's own allow entries don't join the layer's deny policy";
       assert lib.assertMsg (!(ownAgents "layer-own-unlisted").success)
         "layer-instance: jane's own marketplace, which nobody allows, evaluates under the layer's deny";
-      # The layer's scalars are mkDefault (its lists plain): jane's plain value
-      # wins, with no mkForce, as the starter's host files say.
+      # The layer's scalars are piste.lib.mkPackDefault (its lists plain):
+      # jane's plain value wins, with no mkForce, as the starter's host files
+      # say, and the layer's wins over an engine default (mkDefault).
       assert lib.assertMsg (let
-          mine = builtins.tryEval ((instance ../../tests/fixtures/template/layer-linux).homeConfigurations."jane@devbox".extendModules {
-            modules = [ { home.sessionVariables.TEAM_LAYER = "mine"; } ];
+          teamLayer = m: builtins.tryEval ((instance ../../tests/fixtures/template/layer-linux).homeConfigurations."jane@devbox".extendModules {
+            modules = [ { home.sessionVariables.TEAM_LAYER = m; } ];
           }).config.home.sessionVariables.TEAM_LAYER;
-        in mine.success && mine.value == "mine")
-        "layer-instance: jane's plain home.sessionVariables.TEAM_LAYER doesn't win over the layer's";
+          mine = teamLayer "mine";
+          engine = teamLayer (lib.mkDefault "engine");
+        in mine.success && mine.value == "mine" && engine.success && engine.value == "fixture")
+        "layer-instance: jane's plain home.sessionVariables.TEAM_LAYER doesn't win over the layer's, or the layer's doesn't win over a mkDefault";
       pkgs.runCommand "check-layer-instance" { } "touch $out";
     # mkFlake does a host's wiring (the thin starter): its hosts bring none of
     # it. A Mac whose home module takes `piste` and a Linux home on the dev
