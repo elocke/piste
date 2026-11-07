@@ -170,8 +170,10 @@ piste.lib.mkFlake {
   #      of the system, or one attrset for every system;
   #    packages.<s> and checks.<s> for each of systems plus every host's system;
   #    checks.<s> = zoneChecks over every host's home + the overlay's own (no shared names);
-  #    throws "mkFlake: …" on another host key or system, aliases on a *-linux host,
-  #      an alias that is a host's name or is given twice.
+  #    throws "mkFlake: …" on another host key, system or role (a role is base, dev,
+  #      desktop, container or extras), aliases on a *-linux host, an alias that is a
+  #      host's name or is given twice, a devcontainer key other than name, modules,
+  #      extraSpecialArgs, and a bundle key other than presets.
   #    *-linux hosts get the package set: homeManagerModules.packages, its resolved
   #      list in home.packages and overlays.shared ahead of the host's overlays.
   #    Every host gets its wiring from mkFlake (its modules bring none of it):

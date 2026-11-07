@@ -1,6 +1,9 @@
 { pkgs, lib, ... }:
 
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/ssh";
+
   programs.ssh = {
     enable = true;
     # Disable deprecated default config - set defaults explicitly in settings."*"

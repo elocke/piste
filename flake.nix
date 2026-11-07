@@ -174,6 +174,11 @@
           zoneChecks = import ./lib/zone-checks.nix { inherit (nixpkgs) lib; };
           # An overlay's flake outputs from one call.
           mkFlake = import ./lib/mk-flake.nix { piste = self; };
+          # A pack's (or a team layer's) default, at priority 950: it wins
+          # over the engine's mkDefault (1000) and loses to a person's plain
+          # value (100), with no mkForce either way. A pack reaches it through
+          # its own flake input: inputs.piste.lib.mkPackDefault.
+          mkPackDefault = nixpkgs.lib.mkOverride 950;
 
           # home-manager activation that installs the given pnpm packages
           # globally, skipping any already on the global list. An overlay

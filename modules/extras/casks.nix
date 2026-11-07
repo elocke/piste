@@ -38,6 +38,9 @@ let
   ];
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/casks";
+
   options.piste.roles.extras.casks.enable =
     (lib.mkEnableOption "the extras pack's extra Homebrew casks and the default apps for file types") // { default = true; };
 

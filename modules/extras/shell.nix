@@ -33,6 +33,9 @@ let
   };
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/shell";
+
   options.piste.roles.extras.shell.enable =
     (lib.mkEnableOption "the extras pack's shell aliases and settings") // { default = true; };
 

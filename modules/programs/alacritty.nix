@@ -4,6 +4,9 @@ let
   fontSize = if pkgs.stdenv.hostPlatform.isDarwin then 14 else 10;
 in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/alacritty";
+
   programs.alacritty = {
     # The package is GL-dependent: on by default on a Mac, a choice on Linux.
     enable = lib.mkDefault pkgs.stdenv.hostPlatform.isDarwin;

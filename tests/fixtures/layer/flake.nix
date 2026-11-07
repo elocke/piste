@@ -17,7 +17,12 @@
       };
 
       # Every home on the team imports `default`; a Mac adds darwinModules.default.
-      homeManagerModules.default = import ./modules/home.nix { inherit meta; };
+      # The layer's defaults are the engine's pack tier, through this flake's
+      # own piste input.
+      homeManagerModules.default = import ./modules/home.nix {
+        inherit meta;
+        inherit (piste.lib) mkPackDefault;
+      };
       darwinModules.default = ./modules/darwin.nix;
 
       templates.default = {

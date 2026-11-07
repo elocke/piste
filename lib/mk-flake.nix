@@ -26,14 +26,17 @@
 # take a function of the system or one attrset for every system.
 #
 # A host has system and, each optional, modules, overlays, roles and aliases.
-# A role is a name in piste.homeManagerModules (base, dev, desktop, container,
-# extras); a *-darwin host that lists one with a darwinModules entry of the
-# same name (extras) gets that too.
+# A role is one of base, dev, desktop, container and extras, each a module in
+# piste.homeManagerModules (no other name there is a role); a *-darwin host
+# that lists one with a darwinModules entry of the same name (extras) gets
+# that too.
 # A *-darwin host is a nix-darwin system (plus one per alias); a *-linux host
 # is a standalone home-manager configuration, its name being "user@host", and
-# has no aliases. mkFlake throws "mkFlake: …" on any other host key or
-# system, on aliases on a *-linux host, and on an alias that is a host's
-# name or is given twice.
+# has no aliases. mkFlake throws "mkFlake: …" on any other host key, system
+# or role, on aliases on a *-linux host, and on an alias that is a host's
+# name or is given twice; and on a devcontainer key other than name, modules
+# and extraSpecialArgs, or a bundle key other than presets (the only ones it
+# reads).
 #
 # What mkFlake adds to every host (its wiring), so a host's own modules
 # bring none of it:
@@ -68,7 +71,9 @@
 #
 # The nixpkgs / darwin / home-manager / nix-homebrew / homebrew-* inputs are
 # the overlay's when it declares them, else piste's own.
-{ piste }:
+# `fail` is for the engine's own checks, which read the message: mkFlake
+# hands it the message it would throw.
+{ piste, fail ? throw }:
 {
   inputs,
   self,
@@ -278,8 +283,20 @@ let
   hostSystems = lib.unique (lib.mapAttrsToList (_: h: h.system) hosts);
   allSystems = lib.unique (systems ++ hostSystems);
 
-  # --- mistakes in hosts, which would otherwise pass silently ----------------
+  # --- mistakes in hosts and arguments, which would otherwise pass silently --
   hostKeys = [ "system" "modules" "overlays" "roles" "aliases" ];
+  roleNames = [ "base" "dev" "desktop" "container" "extras" ];
+  roleList = "${lib.concatStringsSep ", " (lib.init roleNames)} or ${lib.last roleNames}";
+  devcontainerKeys = [ "name" "modules" "extraSpecialArgs" ];
+  bundleKeys = [ "presets" ];
+  # An argument's keys mkFlake doesn't read.
+  unknownKeys =
+    arg: v: keys:
+    lib.optionals (lib.isAttrs v) (
+      map (k: "${arg}: unknown key ${k} (${arg} takes ${lib.concatStringsSep ", " keys})") (
+        lib.subtractLists keys (lib.attrNames v)
+      )
+    );
   allAliases = lib.concatLists (lib.mapAttrsToList (_: h: h.aliases or [ ]) hosts);
   mistakes =
     lib.concatLists (
@@ -300,15 +317,20 @@ let
         )
         ++ lib.optional (known && isLinux system && (host.aliases or [ ]) != [ ])
           "host ${name}: aliases are for *-darwin hosts only"
+        ++ map (r: "host ${name}: unknown role ${if builtins.isString r then r else lib.generators.toPretty { multiline = false; } r} (a role is ${roleList})") (
+          lib.filter (r: !(lib.elem r roleNames)) (host.roles or [ ])
+        )
       ) hosts
     )
     ++ map (a: "alias ${a} is also a host's name") (lib.filter (a: hosts ? ${a}) (lib.unique allAliases))
     ++ map (a: "alias ${a} is given more than once") (
       lib.filter (a: lib.count (x: x == a) allAliases > 1) (lib.unique allAliases)
-    );
+    )
+    ++ unknownKeys "devcontainer" devcontainer devcontainerKeys
+    ++ unknownKeys "bundle" bundle bundleKeys;
 in
 if mistakes != [ ] then
-  throw (lib.concatMapStringsSep "\n" (m: "mkFlake: ${m}") mistakes)
+  fail (lib.concatMapStringsSep "\n" (m: "mkFlake: ${m}") mistakes)
 else
 {
   inherit darwinConfigurations homeConfigurations;

@@ -170,7 +170,8 @@ piste init --layer <the layer's git url>
 `piste update` moves the layer's pin along with the engine's. The preview
 label means a layer is outside [what a release
 promises](upgrading.md#what-a-release-promises): it may change in a minor
-release. piste reads only this of a layer:
+release, and layers are expected to become packs
+([design/packs.md](design/packs.md)). piste reads only this of a layer:
 
 - `piste-layer.toml` at its root: its zone, and the secrets it expects (env
   var = sops key path).
@@ -182,9 +183,12 @@ release. piste reads only this of a layer:
 - Its engine input, named `piste` like the overlay's, which the starter makes
   follow the overlay's.
 
-The rest (its outputs and modules) is between the layer and its starter. In a
-layer's modules, scalars are `lib.mkDefault` and lists plain, so a person's
-plain value wins and their list entries go beside the team's.
+The rest (its outputs, `pisteLayer` among them, and its modules) is between
+the layer and its starter. In a layer's modules, scalars are
+`piste.lib.mkPackDefault` (priority 950, from the layer's own `piste` input)
+and lists plain. A person's plain value then wins over the team's, the team's
+wins over the engine's `lib.mkDefault`, and the person's list entries go
+beside the team's ([who wins](customising.md#who-wins)).
 `tests/fixtures/layer` in this repo is a complete small example.
 
 ## What a build uses

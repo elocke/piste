@@ -10,6 +10,9 @@
 
 let cfg = config.piste.roles.extras.macos; in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/macos";
+
   options.piste.roles.extras.macos.enable =
     (lib.mkEnableOption "the extras pack's macOS input and system settings") // { default = true; };
 

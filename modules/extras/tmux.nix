@@ -11,6 +11,9 @@
 
 let cfg = config.piste.roles.extras.tmux; in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/tmux";
+
   options.piste.roles.extras.tmux.enable =
     (lib.mkEnableOption "the extras pack's tmux plugins and settings") // { default = true; };
 

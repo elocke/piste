@@ -7,6 +7,9 @@
 
 let cfg = config.piste.roles.extras.editor; in
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:extras/editor";
+
   options.piste.roles.extras.editor.enable =
     (lib.mkEnableOption "the extras pack's editor settings") // { default = true; };
 

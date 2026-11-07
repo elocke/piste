@@ -1,6 +1,9 @@
 { config, pkgs, lib, ... }:
 
 {
+  # The piece's handle: disabledModules = [ { key = <this>; } ] drops it (its path doesn't).
+  key = "pack:core/tmux";
+
   programs.tmux = {
     enable = true;
     plugins = with pkgs.tmuxPlugins; [
