@@ -19,6 +19,8 @@ branch is up to date with `main` when it merges: a cut that brings other
 changes in with it isn't released.
 
 ## Unreleased
+
+## v0.1.0 (2026-11-07)
 - First public release. piste sets up Macs and Linux machines from one Nix configuration, and its `piste` command keeps them that way. Start with the [README](https://github.com/elocke/piste#readme).
 - Start with `nix run github:elocke/piste/stable -- setup`. `stable` is a branch that follows the newest release. `piste setup` checks what piste needs (Nix with flakes, git, and on a Mac the Xcode command-line tools), clones piste at its newest release, creates your overlay or adds one you already have, builds this machine, says what the switch will change, and offers the first switch. Releases attach no binaries; the source tag is the release.
 - Your own setup (your user, your machines, your packages, your secrets) lives in an overlay: a small git repo of your own, inside the piste checkout. Its `flake.nix` calls `piste.lib.mkFlake`, which wires your hosts. A Mac (Apple silicon) is a nix-darwin system with Homebrew managed by nix-homebrew; a Linux machine is a standalone home-manager configuration. NixOS isn't a target.
