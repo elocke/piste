@@ -1,0 +1,1 @@
+Error: codex mcp list --json returned unexpected JSON (not a server listing): {"error":"boom"}

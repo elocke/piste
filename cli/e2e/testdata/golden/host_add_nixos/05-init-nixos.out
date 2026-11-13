@@ -1,0 +1,18 @@
+System [x86_64-linux]: 
+Hostname [testhost]: 
+Roles (base, dev, desktop, or none; the macOS platform brings desktop) [dev]: 
+Set up sops secrets (an age key and .sops.yaml)? y/n [n]: 
+Start minimal or with everything (the extras role: more tools, aliases and settings)? minimal/everything [minimal]: 
+Created overlays/mine (host testhost, zone personal), its files staged
+This machine's /etc/nixos is in hosts/testhost/machine/
+Needs you (marked "# piste:" in the files):
+  channels.nix:6: the flake build doesn't use channels
+  configuration.nix:20: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+  configuration.nix:24: system.autoUpgrade would rebuild from /etc/nixos, not this overlay
+/etc/nixos stays on this machine; piste switch builds this overlay, and a plain nixos-rebuild switch doesn't.
+1 SSH key from ~/.ssh/authorized_keys may log in as jane (hosts/testhost/default.nix)
+Engine pinned at github:example/piste/v0
+Flake: $WORK/ck2/overlays/mine (checkout $WORK/ck2: overlay mine (--overlay))
+engine override: $WORK/ck2 (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch

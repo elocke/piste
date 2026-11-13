@@ -1,0 +1,4 @@
+Flake: $WORK/flake
+engine override: none (flake has no piste input)
+Previewing generation diff (darwin)...
+Rerun with: piste --verbose gendiff

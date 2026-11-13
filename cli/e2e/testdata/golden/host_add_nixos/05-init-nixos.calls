@@ -1,0 +1,3 @@
+nix eval --json $WORK/ck2/overlays/mine#. --override-input piste git+file://$WORK/ck2 --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix build $WORK/ck2/overlays/mine#nixosConfigurations."testhost".config.system.build.toplevel --override-input piste git+file://$WORK/ck2
+nix eval --json $WORK/ck2/overlays/mine#nixosConfigurations."testhost".config --override-input piste git+file://$WORK/ck2 --apply c: { hostName = c.networking.hostName; proxmoxLXC = (c.proxmoxLXC.enable or false) && !(c.proxmoxLXC.manageNetwork or false) && !(c.proxmoxLXC.manageHostName or false); proxmoxCloudInit = c.proxmox.cloudInit.enable or false; } --no-write-lock-file

@@ -1,0 +1,1 @@
+{"marketplaces": {"cctools-plugins": {"path": "/x"}, "piste-local": {"path": "$WORK/market"}}, "plugins": {"safety-hooks@cctools-plugins": {"version": "0.1.1", "enabled": true}, "piste-harness@piste-local": {"version": "0.0.0-bbbb", "enabled": true, "scope": "user"}}}

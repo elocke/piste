@@ -1,0 +1,19 @@
+# codex_deny_midwildcard_errors: `rm * -rf` → render error,
+# and no .rules file (or anything else) written.
+
+mkdir proj/.git
+cd proj
+! exec piste agents add personal:permission/rm-mid --zone-root=bad=personal:$WORK/badzone $RS
+stderr 'wildcard'
+! exists .codex/rules/piste.rules
+! exists .claude/settings.json
+! exists .agents/agents.lock
+
+-- badzone/permissions.toml --
+[[permission]]
+name = "rm-mid"
+pattern = "rm * -rf"
+decision = "deny"
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

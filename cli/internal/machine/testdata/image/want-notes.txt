@@ -1,0 +1,1 @@
+configuration.nix:20: the host's name is its key in flake.nix (mkFlake sets networking.hostName)

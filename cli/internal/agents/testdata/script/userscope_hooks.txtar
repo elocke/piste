@@ -1,0 +1,106 @@
+# User-scope hooks: sync + check of the Claude carrier, the
+# owned Codex hooks.json groups and their trust, with the tests/agents fakes
+# as `claude` / `codex`. Every stdout, stderr, exit code, hooks.json, ledger,
+# trust file and the fake claude's call log are frozen in
+# $GOLDEN/userscope_hooks.
+[!fakes] skip 'PISTE_AGENTS_FAKES not set'
+
+chmod 0755 bin/claude
+chmod 0755 bin/codex
+env PATH=$WORK/bin${:}$PATH
+env HOME=$WORK/h
+
+exec sh scenario.sh
+# Not vacuous: the fakes really ran.
+grep 'running: claude plugin install piste-harness@piste-local --scope user' out/04-sync.out
+grep 'trusting Codex hook' out/04-sync.out
+grep '^ok +hooks +claude:piste-harness@piste-local' out/05-check-after.out
+grep '^ok +hooks-trust' out/05-check-after.out
+grep 'running: claude plugin update piste-harness@piste-local' out/08-bump.out
+grep 'running: claude plugin uninstall piste-harness@piste-local' out/09-retract.out
+cmpworkdir out $GOLDEN/userscope_hooks
+
+-- bin/claude --
+#!/bin/sh
+exec python3 "$FAKES/claude" "$@"
+-- bin/codex --
+#!/bin/sh
+exec python3 "$FAKES/codex" "$@"
+-- scenario.sh --
+# usage: scenario.sh — runs every step, recording outputs in out/
+out=out
+rm -rf h "$out" state.json state.json.log market
+mkdir -p "$out" h/.codex h/.claude market/.claude-plugin market/piste-harness/.claude-plugin
+cp foreign-codex.json h/.codex/hooks.json
+cp foreign-settings.json h/.claude/settings.json
+cp claude-state.json state.json
+printf '{"name": "piste-local"}' > market/.claude-plugin/marketplace.json
+export FAKE_CLAUDE_STATE="$PWD/state.json"
+m="$PWD/m.json"
+sed "s|MARKET|$PWD/market|g" manifest.json > m.json
+sed "s|MARKET|$PWD/market|g" manifest-v2.json > m2.json
+sed "s|MARKET|$PWD/market|g" manifest-none.json > m0.json
+
+run() { # step cmd...
+  step=$1; shift
+  if [ "$1" = sync ]; then shift; set -- sync --user "$@"; fi
+  PISTE_AGENTS_TOOL=1 piste agents "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp h/.codex/hooks.json "$out/$step.hooks.json" 2>/dev/null
+  cp h/.local/state/piste-agents/ledger.json "$out/$step.ledger.json" 2>/dev/null
+  cp h/.codex/fake-trust.json "$out/$step.trust.json" 2>/dev/null
+  cp state.json "$out/$step.state.json"
+  cp state.json.log "$out/$step.calls" 2>/dev/null
+}
+printf '{"version": "0.0.0-aaaa"}' > market/piste-harness/.claude-plugin/plugin.json
+run 01-check-before check --manifest "$m"
+run 02-check-before-json check --manifest "$m" --json
+run 03-dry sync --manifest "$m" --dry-run
+run 04-sync sync --manifest "$m"
+run 05-check-after check --manifest "$m"
+run 06-resync sync --manifest "$m"
+printf '{"version": "0.0.0-bbbb"}' > market/piste-harness/.claude-plugin/plugin.json
+run 07-check-stale check --manifest "$PWD/m2.json"
+run 08-bump sync --manifest "$PWD/m2.json"
+run 09-retract sync --manifest "$PWD/m0.json"
+run 10-check-none check --manifest "$PWD/m0.json" --json
+exit 0
+-- foreign-codex.json --
+{
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "node \"/home/u/.hindsight/coding-agents/dist/codex-hook.js\"", "timeout": 30}]}],
+    "PreToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "if [ -n \"$PASEO_TERMINAL_ID\" ]; then \"${PASEO_HOOK_CLI:-paseo}\" hooks codex PreToolUse; fi", "timeout": 10}]}]
+  }
+}
+-- foreign-settings.json --
+{
+  "hooks": {
+    "PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "/home/u/.claude/hooks/rtk-rewrite.sh"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "node \"/home/u/.hindsight/coding-agents/dist/claude-stop-hook.js\" — ünïcode"}]}]
+  },
+  "enabledPlugins": {"safety-hooks@cctools-plugins": true}
+}
+-- claude-state.json --
+{"marketplaces": {"cctools-plugins": {"path": "/x"}}, "plugins": {"safety-hooks@cctools-plugins": {"version": "0.1.1", "enabled": true}}}
+-- manifest.json --
+{"version": 2, "links": [], "instructions": [], "deferred": [], "hooks": {
+  "bin_dir": ".local/share/piste-agents/hooks/bin",
+  "replaces": {"claude_plugins": ["safety-hooks@cctools-plugins"], "hook_commands": [".claude/hooks/rtk-rewrite.sh"]},
+  "claude": {"marketplace": "MARKET", "marketplace_name": "piste-local", "plugin": "piste-harness@piste-local", "version": "0.0.0-aaaa",
+             "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\"", "timeout": 45}]}]}},
+  "codex": {"target": ".codex/hooks.json",
+            "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\"", "timeout": 45}]},
+                                     {"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/rtk-rewrite\"", "timeout": 10}]}]}}}}
+-- manifest-v2.json --
+{"version": 2, "links": [], "instructions": [], "deferred": [], "hooks": {
+  "bin_dir": ".local/share/piste-agents/hooks/bin",
+  "replaces": {"claude_plugins": ["safety-hooks@cctools-plugins"], "hook_commands": [".claude/hooks/rtk-rewrite.sh"]},
+  "claude": {"marketplace": "MARKET", "marketplace_name": "piste-local", "plugin": "piste-harness@piste-local", "version": "0.0.0-bbbb",
+             "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\"", "timeout": 45}]}]}},
+  "codex": {"target": ".codex/hooks.json",
+            "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\"", "timeout": 60}]}]}}}}
+-- manifest-none.json --
+{"version": 2, "links": [], "instructions": [], "deferred": [], "hooks": {
+  "bin_dir": ".local/share/piste-agents/hooks/bin",
+  "replaces": {"claude_plugins": ["safety-hooks@cctools-plugins"], "hook_commands": [".claude/hooks/rtk-rewrite.sh"]},
+  "claude": {}, "codex": {}}}

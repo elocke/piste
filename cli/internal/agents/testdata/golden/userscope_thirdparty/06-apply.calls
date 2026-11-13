@@ -1,0 +1,17 @@
+claude plugin marketplace list --json
+claude plugin list --json
+claude plugin marketplace update piste-local
+claude plugin marketplace list --json
+claude plugin list --json
+codex plugin list --json
+pnpm list -g --depth=0 --json
+claude plugin install gone@urlm --scope user
+claude plugin disable gone@urlm --scope user
+claude plugin install missing@good --scope user
+claude plugin enable off@good --scope user
+claude plugin update old@good --scope user
+claude plugin disable pua@urlm --scope user
+codex plugin add figma@openai-curated
+pnpm add -g drifty@2.0.0
+claude plugin uninstall stray@good --scope user
+codex plugin remove extra@local

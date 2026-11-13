@@ -1,0 +1,4 @@
+manifest: $WORK/h/src/personal/agents/agents.toml
+host: testhost
+claude-code: in sync (0 managed servers)
+claude-code: not ours (plugin/connector/other scope): gw

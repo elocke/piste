@@ -1,0 +1,2 @@
+configuration.nix:20: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+configuration.nix:26: the flake build doesn't use channels

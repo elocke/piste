@@ -1,0 +1,14 @@
+claude-code: gw drifted (url, headers differ); re-adding
+claude-code: pruning elsewhere (declared, but not for claude-code on this host)
+claude-code: added pw
+claude-code: added tool
+claude-code: removed drifted gw
+claude-code: re-added gw
+claude-code: pruned elsewhere
+claude-code: undeclared, left alone: mine, oldc. Declare it, add it to `retired`, or remove it by hand.
+claude-code: not ours, never touched: claude.ai Gmail, plugin:githits:githits
+codex: pruning old (retired in the manifest)
+codex: added tool
+codex: pruned old
+codex: undeclared, left alone: handmade. Declare it, add it to `retired`, or remove it by hand.
+codex: not ours, never touched: node_repl

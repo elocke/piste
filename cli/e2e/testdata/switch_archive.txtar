@@ -1,0 +1,30 @@
+# On a Mac, piste switch fetches the flake's inputs as you (nix flake archive)
+# before the root-run darwin-rebuild, so a private input (a team layer) comes
+# with your git credentials. If that fails, a warning, and root tries.
+[!darwin] skip 'darwin-rebuild switches only on a Mac'
+env USER=tester
+mkdir flake
+cp flake.nix flake/flake.nix
+cp flake.lock flake/flake.lock
+exec git -C flake init -q
+cd flake
+mkdir $WORK/replies
+cp $WORK/hosts.json $WORK/replies/nix
+
+exec piste switch --host hh
+stdout 'Fetching the flake.s inputs as you'
+grep '(?s)nix flake archive --json \S+/flake\n.*sudo darwin-rebuild switch --flake \S+/flake#hh' $WORK/calls
+! stdout 'fetches them as root'
+
+env SHIM_EXIT_NIX_FLAKE=1
+exec piste switch --host hh
+stdout 'Couldn.t fetch the flake.s inputs as you \(.*exit 1\)'
+stdout 'the switch fetches them as root'
+grep 'sudo darwin-rebuild switch --flake \S+/flake#hh' $WORK/calls
+
+-- flake.nix --
+{ outputs = { self }: { darwinConfigurations = { }; }; }
+-- flake.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}
+-- hosts.json --
+["hh"]

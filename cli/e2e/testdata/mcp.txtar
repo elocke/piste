@@ -1,0 +1,146 @@
+# `piste mcp check|sync`, with fake claude / codex that record every call:
+# stdout, stderr, exit codes and harness CLI calls. Outputs are frozen in
+# $GOLDEN/mcp.
+
+chmod 0755 scenario.sh
+chmod 0755 fakebin/claude
+chmod 0755 fakebin/codex
+chmod 0755 fakebin/fake.py
+env USER=tester
+
+exec sh scenario.sh
+grep 'claude-code: gw drifted \(url, headers differ\)' out/01-check.err
+grep 'unpinned' out/01-check.err
+grep '^claude mcp add --scope user tool -e LOG=info -e HINDSIGHT_MCP_HARNESS=claude -- .*/h/bin/tool --flag$' out/05-sync.calls
+grep '^codex mcp remove old$' out/04-prune-apply.calls
+grep 'treating it as drift and re-adding' out/08-already.out
+cmpworkdir $WORK/out $GOLDEN/mcp
+
+-- fakebin/fake.py --
+import json, os, sys
+tool = sys.argv[1]; args = sys.argv[2:]
+w = os.environ["FAKE_WORK"]
+with open(w + "/calls", "a") as f:
+    f.write(" ".join([tool] + args) + "\n")
+fail = os.environ.get("FAKE_FAIL", "")
+if tool == "claude":
+    if args[:2] == ["mcp", "list"]:
+        if fail == "claude-list":
+            print("boom", file=sys.stderr); sys.exit(3)
+        print("Checking MCP server health…\n")
+        print("gw: https://old.example/mcp (HTTP) - ✓ Connected")
+        print("oldc: https://x/mcp (HTTP) - ✓ Connected")
+        print("mine: node /x.js - ✓ Connected")
+        print("plugin:githits:githits: npx -y githits@0.6.6 - ✓ Connected")
+        print("claude.ai Gmail: https://gmail.mcp.claude.com/mcp - ! Needs authentication")
+        print("\nFor help configuring MCP servers, see: https://code.claude.com/docs")
+        print("Location: /home/x/.claude.json")
+    elif args[:2] == ["mcp", "add"]:
+        if fail == "already" and "tool" in args:
+            print("MCP server tool already exists in user config", file=sys.stderr); sys.exit(1)
+    elif args[:2] == ["mcp", "remove"]:
+        pass
+    sys.exit(0)
+if tool == "codex":
+    if args[:3] == ["mcp", "list", "--json"]:
+        if fail == "codex-list":
+            sys.exit(2)
+        print(json.dumps([
+            {"name": "gw", "transport": {"type": "streamable_http", "url": "https://gw.example/mcp", "bearer_token_env_var": "GW_TOKEN"}},
+            {"name": "old", "transport": {"type": "stdio", "command": "old-mcp", "args": []}},
+            {"name": "node_repl", "transport": {"type": "stdio", "command": "codex"}},
+            {"name": "handmade", "transport": {"type": "stdio", "command": "hm"}}]))
+    sys.exit(0)
+-- fakebin/claude --
+#!/bin/sh
+exec python3 "$FAKE_WORK/fakebin/fake.py" claude "$@"
+-- fakebin/codex --
+#!/bin/sh
+exec python3 "$FAKE_WORK/fakebin/fake.py" codex "$@"
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out" "$WORK/h"; mkdir -p "$out" "$WORK/h/src/personal/agents" "$WORK/h/.codex"
+H=$WORK/h
+cp $WORK/fx/agents.toml "$H/src/personal/agents/agents.toml"
+sed "s|HOSTNAME|testhost|" $WORK/fx/agents.toml > "$H/src/personal/agents/agents.toml"
+cp $WORK/fx/claude.json "$H/.claude.json"
+cp $WORK/fx/config.toml "$H/.codex/config.toml"
+export HOME=$H FAKE_WORK=$WORK PATH=$WORK/fakebin:$PATH COLUMNS=500
+cd "$H/src/personal"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+run 01-check mcp check
+run 02-dry mcp sync --dry-run
+run 03-prune-dry mcp sync --prune
+GW_TOKEN=x run 04-prune-apply mcp sync --prune --apply
+GW_TOKEN=x run 05-sync mcp sync
+run 06-missing-env mcp sync
+run 07-apply-no-prune mcp sync --apply
+GW_TOKEN=x FAKE_FAIL=already run 08-already mcp sync
+FAKE_FAIL=claude-list run 09-claude-list-fail mcp check
+FAKE_FAIL=codex-list run 10-codex-fallback mcp check
+cp $WORK/fx/claude.json "$H/.claude/.config.json" 2>/dev/null || { mkdir -p "$H/.claude"; cp $WORK/fx/claude.json "$H/.claude/.config.json"; }
+run 11-stale-config mcp check
+# Outside any repo, with no agents manifest: the overlay of the ~/piste
+# checkout (its only one), as piste resolves it.
+mkdir -p "$H/piste/overlays/personal"; : > "$H/piste/.piste"; echo '{ }' > "$H/piste/flake.nix"
+echo '{ }' > "$H/piste/overlays/personal/flake.nix"
+cp -r "$H/src/personal/agents" "$H/piste/overlays/personal/"
+cd /
+run 12-fallback-manifest mcp check
+exit 0
+-- fx/agents.toml --
+retired = ["old"]
+
+[[mcp]]
+name = "gw"
+transport = "http"
+url = "https://gw.example/mcp"
+bearerEnv = "GW_TOKEN"
+harnesses = ["claude-code", "codex"]
+
+[[mcp]]
+name = "tool"
+transport = "stdio"
+command = "~/bin/tool"
+args = ["--flag"]
+env = { LOG = "info" }
+harnesses = ["claude-code", "codex"]
+harnessEnv = { claude-code = { HINDSIGHT_MCP_HARNESS = "claude" }, codex = { HINDSIGHT_MCP_HARNESS = "codex" } }
+
+[[mcp]]
+name = "pw"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@playwright/mcp"]
+harnesses = ["claude-code"]
+hosts = ["HOSTNAME"]
+
+[[mcp]]
+name = "elsewhere"
+transport = "stdio"
+command = "x"
+harnesses = ["claude-code", "codex"]
+hosts = ["some-other-host"]
+
+[[mcp]]
+name = "notes"
+transport = "http"
+url = "https://notes.example/mcp"
+harnesses = ["claude-desktop"]
+-- fx/claude.json --
+{"mcpServers": {
+  "gw": {"type": "http", "url": "https://old.example/mcp", "headers": {"Authorization": "Bearer literal"}},
+  "oldc": {"type": "http", "url": "https://x/mcp"},
+  "elsewhere": {"command": "x"},
+  "mine": {"command": "node", "args": ["/x.js"]}
+}}
+-- fx/config.toml --
+# codex config
+[mcp_servers.gw]
+url = "https://gw.example/mcp"

@@ -1,0 +1,6 @@
+      hosts."box" = {
+        system = "x86_64-linux";
+        nixos = true;
+        roles = [ "dev" ];
+        modules = [ ./hosts/box ];
+      };

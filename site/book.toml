@@ -1,0 +1,14 @@
+[book]
+title = "piste"
+src = "src"
+
+[build]
+create-missing = false
+
+[output.html]
+site-url = "/piste/"
+git-repository-url = "https://github.com/elocke/piste"
+# The repository link only; no "edit this page" (the pages are staged copies).
+
+[output.html.search]
+enable = true

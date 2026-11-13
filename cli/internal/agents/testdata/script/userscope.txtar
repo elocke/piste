@@ -1,0 +1,71 @@
+# User-scope apply and check: stdout, stderr, exit codes and resulting files
+# (text and --json). Its outputs are frozen in $GOLDEN/userscope.
+
+env HOME=$WORK/h
+env G=$GOLDEN/userscope
+
+exec sh setup.sh
+exec piste agents apply --manifest m.json
+cmpwork stdout $G/apply.out
+! exec piste agents check --manifest m.json
+cmpwork stdout $G/check.out
+! exec piste agents check --manifest m.json --json
+cmpwork stdout $G/check.json
+cmpwork h/.claude/CLAUDE.md $G/claude.md
+cmpwork h/.codex/AGENTS.md $G/agents.md
+cmpwork h/.local/state/piste-agents/ledger.json $G/ledger.json
+# a hand edit is refused
+exec sh edit.sh
+! exec piste agents apply --manifest m.json
+cmpwork stderr $G/refused.err
+! exec piste agents check --manifest missing.json
+cmpwork stderr $G/missing.err
+
+-- setup.sh --
+rm -rf h
+mkdir -p h/.claude/skills h/.agents/skills/unmanaged-one
+printf '# my notes\nkeep me' > h/.claude/CLAUDE.md
+ln -s "$PWD/src/skills/ok" h/.claude/skills/ok
+ln -s "$PWD/src/skills/gone" h/.claude/skills/broken
+ln -s "$PWD/src/skills/bad" h/.claude/skills/bad
+mkdir h/.claude/skills/copy h/.claude/skills/hand h/.claude/skills/paseo
+ln -s "$PWD/src/skills/ok" h/.agents/skills/ok
+-- edit.sh --
+sed 's/Never do the bad thing./Hand edit./' h/.claude/CLAUDE.md > h/.claude/CLAUDE.md.t && mv h/.claude/CLAUDE.md.t h/.claude/CLAUDE.md
+-- src/skills/ok/SKILL.md --
+---
+name: ok
+description: A good skill.
+---
+body
+-- src/skills/bad/SKILL.md --
+---
+name: wrong-name
+---
+no description
+-- blocks/claude.md --
+<!-- source: shared/instructions/never.md -->
+## Never
+
+Never do the bad thing.
+-- blocks/codex.md --
+<!-- source: shared/instructions/never.md -->
+## Never (Codex)
+-- m.json --
+{
+  "version": 2,
+  "zone": "personal",
+  "links": [
+    {"target": ".claude/skills/ok", "kind": "skills", "name": "ok", "harness": "claude", "repo": "n", "source": "src/skills/ok"},
+    {"target": ".claude/skills/broken", "kind": "skills", "name": "broken", "harness": "claude", "repo": "n", "source": "src/skills/gone"},
+    {"target": ".claude/skills/bad", "kind": "skills", "name": "bad", "harness": "claude", "repo": "n", "source": "src/skills/bad"},
+    {"target": ".claude/skills/copy", "kind": "skills", "name": "copy", "harness": "claude", "repo": "n", "source": "src/skills/ok"},
+    {"target": ".claude/skills/missing", "kind": "skills", "name": "missing", "harness": "claude", "repo": "n", "source": "src/skills/ok"},
+    {"target": ".agents/skills/ok", "kind": "skills", "name": "ok", "harness": "codex", "repo": "n", "source": "src/skills/ok"}
+  ],
+  "instructions": [
+    {"target": ".claude/CLAUDE.md", "harness": "claude", "fragments": ["shared/instructions/never.md"], "block": "blocks/claude.md", "sha256": "0"},
+    {"target": ".codex/AGENTS.md", "harness": "codex", "fragments": ["shared/instructions/never.md", "x.md"], "block": "blocks/codex.md", "sha256": "0"}
+  ],
+  "deferred": ["paseo"]
+}

@@ -1,0 +1,5 @@
+configuration.nix:15: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+multiline.nix:6: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+nested.nix:6: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+shared-nested.nix:5: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+shared.nix:5: the host's name is its key in flake.nix (mkFlake sets networking.hostName)

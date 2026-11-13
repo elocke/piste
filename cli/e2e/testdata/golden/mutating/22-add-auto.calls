@@ -1,0 +1,2 @@
+nix search nixpkgs#jq --json
+nix eval nixpkgs#jq.name

@@ -1,0 +1,19 @@
+Yours (piste pkgs update moves these)
+Input          Locked      Note
+layer          2026-02-13  a team layer: its newest commit
+nixpkgs-fresh  2026-03-01  fresh: gh
+team           2026-01-21  -
+worktrunk      2026-02-02  -
+
+pnpm globals: none declared (piste.packages.pnpm in home.nix)
+
+The engine (moves with piste releases)
+The checkout's nixpkgs is from 2026-01-09 (290 days old)
+piste: the checkout is on the branch main, 1 commit behind origin (piste update pulls it)
+This overlay's engine pin is a branch or another ref, not a release: it moves with the checkout.
+Input         Locked
+home-manager  2026-01-20
+
+Layer layer (in this overlay: ./layer)
+Input  Locked
+tools  2026-01-05

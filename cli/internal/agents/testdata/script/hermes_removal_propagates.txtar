@@ -1,0 +1,31 @@
+# hermes_removal_propagates: remove a skill from the preset →
+# rebundle → the manifest lacks it; bundle validation fails on the
+# stale tree.
+
+exec piste agents bundle shared:bundle/hermes-family --out stale $RS
+stdout '2 skills'
+exec piste agents bundle --check stale
+stdout 'OK'
+exists stale/skills/tools/gamma/SKILL.md
+
+replace '"alpha", "gamma"' '"alpha"' zones/shared/presets/hermes-family.toml
+exec piste agents bundle shared:bundle/hermes-family --out fresh $RS
+stdout '1 skills'
+! grep gamma fresh/manifest.json
+! exists fresh/skills/tools/gamma
+exec piste agents bundle --check fresh
+
+# The old tree under the new manifest: the extra skill fails the check.
+cp fresh/manifest.json stale/manifest.json
+! exec piste agents bundle --check stale
+stdout 'extra skill skills/tools/gamma'
+
+# Rebundling over the stale tree replaces it whole.
+exec piste agents bundle shared:bundle/hermes-family --out stale $RS
+! exists stale/skills/tools/gamma
+exec piste agents bundle --check stale
+
+# A non-bundle directory is never replaced.
+mkdir notabundle
+! exec piste agents bundle shared:bundle/hermes-family --out notabundle $RS
+stderr 'not a bundle'

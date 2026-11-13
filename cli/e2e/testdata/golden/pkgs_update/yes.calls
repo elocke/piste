@@ -1,0 +1,5 @@
+nix flake update --flake $WORK/home/piste/overlays/mine
+nh home switch --dry $WORK/home/piste/overlays/mine --override-input piste git+file://$WORK/home/piste
+nix eval --json $WORK/home/piste/overlays/mine#. --override-input piste git+file://$WORK/home/piste --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+home-manager switch -b backup-N --flake $WORK/home/piste/overlays/mine#jane@testhost --override-input piste git+file://$WORK/home/piste
+piste-pnpm upgrade

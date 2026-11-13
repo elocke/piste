@@ -1,0 +1,2 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nh home switch --dry $WORK/flake -c tester@hh

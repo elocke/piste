@@ -1,0 +1,86 @@
+{
+  "deferred": [
+    "thirdp"
+  ],
+  "instructions": [
+    {
+      "fragments": [
+        "personal/instructions/extra.md",
+        "shared/instructions/never.md",
+        "shared/instructions/tool.md"
+      ],
+      "harness": "claude",
+      "target": ".claude/CLAUDE.md"
+    },
+    {
+      "fragments": [
+        "shared/instructions/never.md",
+        "shared/instructions/tool.md"
+      ],
+      "harness": "codex",
+      "target": ".codex/AGENTS.md"
+    }
+  ],
+  "links": [
+    {
+      "harness": "codex",
+      "kind": "skills",
+      "name": "alpha",
+      "rel": "skills/web/alpha",
+      "repo": "shared",
+      "target": ".agents/skills/alpha"
+    },
+    {
+      "harness": "codex",
+      "kind": "skills",
+      "name": "beta",
+      "rel": "skills/home/beta",
+      "repo": "personal",
+      "target": ".agents/skills/beta"
+    },
+    {
+      "fetch": {
+        "hash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "rev": "1111111111111111111111111111111111111111",
+        "sparse": [],
+        "url": "https://github.com/example/thirdp2.git"
+      },
+      "harness": "codex",
+      "kind": "skills",
+      "name": "thirdp2",
+      "rel": ".",
+      "repo": "third-party",
+      "target": ".agents/skills/thirdp2"
+    },
+    {
+      "harness": "claude",
+      "kind": "skills",
+      "name": "alpha",
+      "rel": "skills/web/alpha",
+      "repo": "shared",
+      "target": ".claude/skills/alpha"
+    },
+    {
+      "harness": "claude",
+      "kind": "skills",
+      "name": "beta",
+      "rel": "skills/home/beta",
+      "repo": "personal",
+      "target": ".claude/skills/beta"
+    },
+    {
+      "fetch": {
+        "hash": "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+        "rev": "1111111111111111111111111111111111111111",
+        "sparse": [],
+        "url": "https://github.com/example/thirdp2.git"
+      },
+      "harness": "claude",
+      "kind": "skills",
+      "name": "thirdp2",
+      "rel": ".",
+      "repo": "third-party",
+      "target": ".claude/skills/thirdp2"
+    }
+  ]
+}

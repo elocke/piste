@@ -1,0 +1,26 @@
+# Agent content for this project (piste agents).
+zone = "piste"                 # the engine's own project: shared content only (no source is in zone piste)
+harnesses = ["claude", "codex"]
+
+# Adopted: hand-made content this project keeps as its own.
+[[local]]
+path = ".agents/skills/piste-config"
+
+[[local]]
+path = ".agents/skills/piste-fix"
+
+[[local]]
+path = ".claude/skills/piste-config"
+
+[[local]]
+path = ".claude/skills/piste-fix"
+
+[[local]]
+path = ".claude/settings.json"
+note = "the project's deny list"
+
+[[local]]
+path = "AGENTS.md"
+
+[[local]]
+path = "CLAUDE.md"

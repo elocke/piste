@@ -1,0 +1,7 @@
+{ ... }:
+let
+  pnpmPackages = [
+    "typescript"
+    "zen-mcp"
+  ];
+in { }

@@ -1,0 +1,19 @@
+# Shared base preset: what every host in every zone gets.
+# Names resolve against this zone (piste/agents) plus agents.base.toml;
+# a zone preset (in your overlay's agents/presets/) adds to it.
+# Deployed by the piste.agents module (modules/programs/agents.nix).
+targets = ["claude", "codex"]
+
+# Owned skills only: base reaches every zone, and a zone whose policy is
+# unlisted = "deny" (its agents/agents.toml) refuses unapproved third-party
+# sources. Third-party skills from agents.base.toml are selected by a zone's
+# own presets (vuejs-development, say, by a preset of your overlay's). So are
+# the owned skills that aren't for everyone (htmx, say): they stay in the
+# registry and a preset lists them. rtk and the guard hooks are the `rtk` and
+# `guard` presets.
+skills = [
+  "agent-registry", # piste agents: audit, drift, search, add/remove
+]
+agents = []
+commands = []
+instructions = ["never-do", "piste-setup"]

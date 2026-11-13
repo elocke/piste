@@ -1,0 +1,4 @@
+manifest: $WORK/h/src/personal/agents/agents.toml
+host: testhost
+claude-code: stale config $WORK/h/.claude.json (Claude reads $WORK/h/.claude-custom-oauth.json); its servers are not live and are left untouched: gw
+claude-code: in sync (1 managed servers)

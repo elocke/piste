@@ -1,0 +1,26 @@
+# jsonc_comments_preserved: a hujson patch keeps comments.
+
+mkdir proj/.git
+cd proj
+cp .claude/settings.json settings.orig
+
+exec piste agents add shared:plugin/demoplug shared:marketplace/demo-market $RS
+grep '// keep: top comment' .claude/settings.json
+grep '/\* block comment \*/' .claude/settings.json
+grep '"demoplug@demo-market": true' .claude/settings.json
+grep '"repo": "example/demo-market"' .claude/settings.json
+
+exec piste agents remove shared:plugin/demoplug shared:marketplace/demo-market $RS
+cmp .claude/settings.json settings.orig
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude"]
+-- proj/.claude/settings.json --
+{
+  // keep: top comment
+  "model": "opus", /* block comment */
+  "enabledPlugins": {
+    "other@market": true, // trailing comment
+  },
+}

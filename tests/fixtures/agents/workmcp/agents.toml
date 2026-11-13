@@ -1,0 +1,9 @@
+# An allowed MCP package still needs an exact version.
+[policy]
+allow    = ["claude:market", "npm:@example/mcp"]
+unlisted = "deny"
+
+[[mcp]]
+name    = "loose"
+command = "npx"
+args    = ["-y", "@example/mcp@latest"]

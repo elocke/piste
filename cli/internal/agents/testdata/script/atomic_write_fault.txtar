@@ -1,0 +1,24 @@
+# atomic_write_fault: PISTE_FAULT=after-tmp → the original
+# file is intact, and no temp file is left behind.
+
+mkdir proj/.git
+cd proj
+cp AGENTS.md agents.orig
+
+env PISTE_FAULT=after-tmp
+! exec piste agents add shared:instruction/never $RS
+stderr 'injected fault'
+cmp AGENTS.md agents.orig
+! exists .agents/agents.lock
+notmp .
+
+env PISTE_FAULT=
+exec piste agents add shared:instruction/never $RS
+prefix agents.orig AGENTS.md
+
+-- proj/AGENTS.md --
+# Hand-written project notes
+Keep this exactly.
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

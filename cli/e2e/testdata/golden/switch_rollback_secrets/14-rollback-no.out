@@ -1,0 +1,6 @@
+Rolling back...
+  Current:  id 42 (2026-09-30 10:30)
+  Rollback: id 41 (2026-09-29 09:00)
+  Path:     $WORK/gen41
+Activate previous generation? [y/N]: Error: invalid input
+Activate previous generation? [y/N]: Rollback cancelled.

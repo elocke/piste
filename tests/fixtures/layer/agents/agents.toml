@@ -1,0 +1,8 @@
+# The team's agent zone: third-party skills, plugins and MCP servers it
+# declares, beside the engine's shared zone. A team's zone allows only what it
+# lists: here, only the marketplaces the engine's shared catalog
+# (agents/agents.base.toml) brings to every zone.
+
+[policy]
+allow    = ["github:anthropics/claude-plugins-official", "github:astral-sh/claude-code-plugins"]
+unlisted = "deny"

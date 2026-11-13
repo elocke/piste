@@ -1,0 +1,8 @@
+Hostname 'testhost' doesn't match any darwinConfigurations.
+  Declared: tester@linux, other@box
+
+  To build another host's config without activating it:
+      piste build --host <name>
+  To force activation on this hostname (dangerous — only if you
+  really mean to activate a different host's config here):
+      piste switch --host <name>

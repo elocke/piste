@@ -1,0 +1,8 @@
+Fetching piste's releases...
+You're on v0.1.0. Newest: v0.1.1.
+Would move piste: v0.1.0 → v0.1.1
+Would move overlays/mine: engine v0.1.0 → v0.1.1
+Would update overlays/mine's inputs (nix flake update)
+overlays/other's engine is on v0.1.0: piste update moves it
+pnpm globals: would upgrade tsx 4.0.0 → 4.19.0
+Dry run: nothing changed.

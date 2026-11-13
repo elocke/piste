@@ -1,0 +1,10 @@
+config-block.nix:9: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+config-dotted.nix:5: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+config-mkif.nix:8: networking.hostName here may override the host's name; remove it if this machine's name should be its key in flake.nix
+configuration.nix:19: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+inherit.nix:9: networking.hostName here may override the host's name; remove it if this machine's name should be its key in flake.nix
+merge.nix:7: networking.hostName here may override the host's name; remove it if this machine's name should be its key in flake.nix
+nix-blocks.nix:6: the flake build doesn't use channels
+nix-blocks.nix:8: the flake build doesn't use channels
+rec.nix:6: networking.hostName here may override the host's name; remove it if this machine's name should be its key in flake.nix
+with.nix:7: networking.hostName here may override the host's name; remove it if this machine's name should be its key in flake.nix

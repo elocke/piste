@@ -1,0 +1,5 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+nix flake archive --json $WORK/flake
+getent passwd tester
+sudo nixos-rebuild switch --flake $WORK/flake#testhost

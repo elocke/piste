@@ -1,0 +1,4 @@
+Target flake: $WORK/h/piste/overlays/personal
+Adding pnpm global to js-globals.nix: zen-mcp
+Added "zen-mcp" to pnpmPackages in js-globals.nix
+Run 'piste switch' to install it.

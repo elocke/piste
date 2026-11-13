@@ -1,0 +1,2 @@
+othermachine is already another machine's host in this overlay (its root is $WORK/dev/vdb1, this machine's is $WORK/dev/vda1): give this machine its own name with --name
+  If this is othermachine reinstalled, update fileSystems in hosts/othermachine/ to this machine's root ($WORK/dev/disk/by-uuid/aaaa) instead.

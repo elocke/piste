@@ -1,0 +1,6 @@
+Target flake: $WORK/h/piste/overlays/personal
+Searching nixpkgs for 'jq'...
+Package  Version  Attribute
+jq       1.7      legacyPackages.x86_64-linux.jq
+
+Add to packages-module.nix: cli (shell tools) or dev (development tools)

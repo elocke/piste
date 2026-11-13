@@ -1,0 +1,136 @@
+# piste setup <team layer url>: the layer's starter becomes this
+# person's overlay (init --layer, every question asked but the zone), built,
+# switched, then the team's plugins and MCP servers synced. Declining the
+# switch syncs nothing and says what to run. piste add refuses a layer.
+env USER=jane
+exec sh mkremote.sh
+exec sh mklayer.sh
+# git, counting its clones (the real git does the work).
+exec sh mkgit.sh
+env PATH=$WORK/gitbin:$PATH
+cp hosts-here.json $WORK/replies/nix-eval
+cp nix-config-on.txt $WORK/replies/nix-config
+
+# The manifest the switch writes (the shim doesn't): the work zone's agents,
+# as the layer brings them.
+mkdir $WORK/home/.config/piste-agents
+exec sh mkmanifest.sh
+
+stdin answers-switch.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/piste file://$WORK/team.git
+stdout 'Created overlays/work'
+stdout 'On the team layer git\+file://.*/team.git'
+# The layer is cloned once: setup's look at the URL is the clone init uses.
+grep -count=1 'team.git' $WORK/gitclones
+! stdout 'Agent zone'
+grep 'url = "git\+file://.*/team.git";' $WORK/home/piste/overlays/work/flake.nix
+exists $WORK/home/piste/overlays/work/secrets/env/api-keys.sops.yaml
+grep '^(nix build|darwin-rebuild build) .*overlays/work' $WORK/calls
+grep '^(home-manager switch|sudo darwin-rebuild switch) .*overlays/work' $WORK/calls
+# After the switch: the agents sync, then the MCP sync, each finishing.
+stdout '\$ piste agents sync --user'
+stdout '\$ piste mcp sync'
+! stdout 'didn.t finish'
+[linux] stdout 'Open a new shell'
+[darwin] stdout 'Open Ghostty'
+
+# Run again with the same layer URL: the overlay already on it is used.
+cd $WORK/home/piste
+stdin $WORK/no.txt
+exec piste setup file://$WORK/team.git
+stdout 'overlays/work is on the team layer git\+file://.*/team.git: using it'
+! stdout 'Created overlays'
+cd $WORK
+
+# The switch declined: no sync, and the closing text says what to run.
+stdin answers-later.txt
+exec piste setup --from file://$WORK/remote/piste.git --dir $WORK/home/p2 file://$WORK/team.git
+stdout 'Created overlays/work'
+! stdout '\$ piste agents sync'
+stdout 'piste agents sync --user'
+
+# setup with the git+ ref piste printed: the same overlay, found again.
+cd $WORK/home/piste
+stdin $WORK/no.txt
+exec piste setup git+file://$WORK/team.git
+stdout 'overlays/work is on the team layer'
+cd $WORK
+
+# setup's help names the team layer and the syncs it ends with.
+exec piste setup --help
+stdout 'team layer'
+stdout 'agents sync --user'
+
+# piste add: a layer is not an overlay to add.
+cd $WORK/home/piste
+! exec piste add file://$WORK/team.git
+stderr 'is a team layer: start your overlay on it with piste setup'
+# add's clone of the layer is removed, and setup's runs left no clone of it.
+exec ls -A overlays
+! stdout '^\.piste-add'
+exec ls -A $WORK/.tmp
+! stdout 'piste-layer-'
+
+-- hosts-here.json --
+{"darwin": ["testhost"], "home": ["jane@testhost"]}
+-- nix-config-on.txt --
+fetch-closure flakes nix-command
+-- no.txt --
+n
+-- answers-switch.txt --
+
+
+
+
+
+Jane Doe
+jane@example.com
+
+
+y
+-- answers-later.txt --
+
+
+
+
+
+Jane Doe
+jane@example.com
+
+
+n
+-- mkmanifest.sh --
+printf '{"version": 2, "zone": "work", "links": [], "instructions": [], "deferred": [], "sources": [{"name": "work-agents", "zone": "work", "workdir": "%s/team/agents"}]}\n' "$WORK" > "$WORK/home/.config/piste-agents/manifest.json"
+-- mkgit.sh --
+set -e
+real=$(command -v git)
+mkdir -p gitbin
+printf '#!/bin/sh\ncase "$1" in clone) echo "$*" >> %s/gitclones;; esac\nexec %s "$@"\n' "$WORK" "$real" > gitbin/git
+chmod +x gitbin/git
+-- mklayer.sh --
+set -e
+mkdir team && cp -r "$LAYER"/. team/ && chmod -R u+w team
+git -C team init -q -b main && git -C team add -A && git -C team -c user.name=t -c user.email=t@t commit -q -m layer
+git clone -q --bare team team.git
+-- mkremote.sh --
+set -e
+mkdir -p replies src
+cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+c() { git add -A && git -c user.name=t -c user.email=t@x commit -q -m "$1" && git tag "$1"; }
+git init -q -b main
+c v0.1.0
+echo 2 > VERSION && c v0.2.0
+echo 3 > VERSION && c v0.3.0-rc1
+cd .. && mkdir -p remote && git clone -q --bare src remote/piste.git
+repo() { # name flake-body
+  mkdir "src-$1" && cd "src-$1"
+  printf '%s\n' "$2" > flake.nix
+  git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+  cd .. && git clone -q --bare "src-$1" "remote/$1.git"
+}
+repo mine '{ outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }'
+repo plain '{ outputs = _: { }; }'

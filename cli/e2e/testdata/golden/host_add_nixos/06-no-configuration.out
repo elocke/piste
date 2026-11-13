@@ -1,0 +1,10 @@
+Roles from overlays/bare's other NixOS host (othermachine): dev; --role sets others
+Added box (roles: dev) to overlays/bare: hosts/box/ and its entry in flake.nix, staged
+No /etc/nixos/configuration.nix here: hosts/box/machine/configuration.nix is the template's VM; check its boot loader and root filesystem before switching.
+1 SSH key from ~/.ssh/authorized_keys may log in as jane (hosts/box/default.nix)
+Flake: $WORK/ck/overlays/bare (checkout $WORK/ck: overlay bare (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+Setting this machine's hostname to box for now; the switch makes it permanent.
+  To keep it: git -C $WORK/ck/overlays/bare commit -m 'Add box' -- flake.nix hosts/box && git -C $WORK/ck/overlays/bare push

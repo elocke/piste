@@ -1,0 +1,15 @@
+Roles from overlays/other's other NixOS host (othermachine): dev; --role sets others
+Added box (roles: dev) to overlays/other: hosts/box/ and its entry in flake.nix, staged
+This machine's /etc/nixos is in hosts/box/machine/
+Needs you (marked "# piste:" in the files):
+  channels.nix:6: the flake build doesn't use channels
+  configuration.nix:20: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+  configuration.nix:24: system.autoUpgrade would rebuild from /etc/nixos, not this overlay
+/etc/nixos stays on this machine; piste switch builds this overlay, and a plain nixos-rebuild switch doesn't.
+1 SSH key from ~/.ssh/authorized_keys may log in as jane (hosts/box/default.nix)
+Flake: $WORK/ck/overlays/other (checkout $WORK/ck: overlay other (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+Setting this machine's hostname to box for now; the switch makes it permanent.
+  To keep it: git -C $WORK/ck/overlays/other commit -m 'Add box' -- flake.nix hosts/box && git -C $WORK/ck/overlays/other push

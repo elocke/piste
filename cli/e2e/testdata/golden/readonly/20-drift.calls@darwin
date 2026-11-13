@@ -1,0 +1,7 @@
+brew leaves --installed-on-request
+brew list --cask --full-name -1
+brew services list --json
+npm list -g --depth=0 --json
+pnpm list -g --depth=0 --json
+pip list --user --format=json
+nix eval --json $WORK/flake#darwinConfigurations."testhost" --apply (declared.nix) [ "leftpad" "githits" "stray" ]

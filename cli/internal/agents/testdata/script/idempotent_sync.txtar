@@ -1,0 +1,48 @@
+# idempotent_sync: two syncs → no diff; drift exits 0.
+
+mkdir proj/.git
+cd proj
+exec piste agents sync $RS
+stdout 'create +\.agents/skills/alpha'
+stdout 'link +\.claude/skills/alpha'
+stdout 'create +\.claude/agents/rev\.md'
+stdout 'create +\.codex/agents/rev\.toml'
+stdout 'create +AGENTS\.md'
+stdout 'create +\.mcp\.json'
+stdout 'create +\.codex/config\.toml'
+exists .agents/agents.lock
+cp .agents/agents.lock lock1
+cp .mcp.json mcp1
+
+exec piste agents sync $RS
+stdout 'piste agents: up to date'
+cmp .agents/agents.lock lock1
+cmp .mcp.json mcp1
+
+exec piste agents drift $RS
+! stdout '^(edited|missing|outdated|unsynced|gone|policy) '
+
+exec piste agents sync --dry-run $RS
+stdout 'nothing to do'
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+
+[[use]]
+id = "shared:skill/alpha"
+
+[[use]]
+id = "shared:agent/rev"
+
+[[use]]
+id = "shared:instruction/never"
+
+[[use]]
+id = "shared:mcp/demo"
+
+[[use]]
+id = "shared:hook/guard"
+
+[[use]]
+id = "shared:permission/no-rm-rf"

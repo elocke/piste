@@ -1,0 +1,2 @@
+nix flake archive --json $WORK/flake
+sudo darwin-rebuild switch --flake $WORK/flake#b --show-trace

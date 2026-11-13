@@ -1,0 +1,24 @@
+git ls-remote https://github.com/evil/x.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/evil/x.git"; rev = "7777777777777777777777777777777777777777"; hash = pkgs.lib.fakeHash;  }
+git ls-remote https://github.com/o/skills.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/o/skills.git"; rev = "6666666666666666666666666666666666666666"; hash = pkgs.lib.fakeHash; sparseCheckout = [ "skills/moved" ]; }
+git ls-remote https://github.com/o/skills.git HEAD
+nix build --no-link --impure --expr let pkgs = import (builtins.getFlake "nixpkgs") { }; in pkgs.fetchgit { url = "https://github.com/o/skills.git"; rev = "6666666666666666666666666666666666666666"; hash = pkgs.lib.fakeHash; sparseCheckout = [ "skills/unlocked" ]; }
+git ls-remote https://github.com/o/new.git HEAD
+git clone --quiet https://github.com/o/good.git $WORK/.tmp/piste-agents-update-TMP/mirrors/good
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good rev-parse HEAD
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good fetch --quiet origin aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good -c advice.detachedHead=false checkout --quiet aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+claude plugin marketplace add $WORK/.tmp/piste-agents-update-TMP/mirrors/good
+git clone --quiet https://github.com/o/new.git $WORK/.tmp/piste-agents-update-TMP/mirrors/new
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new rev-parse HEAD
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new fetch --quiet origin 9999999999999999999999999999999999999999
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new -c advice.detachedHead=false checkout --quiet 9999999999999999999999999999999999999999
+claude plugin marketplace add $WORK/.tmp/piste-agents-update-TMP/mirrors/new
+claude plugin install elsewhere@new --scope user
+claude plugin install missing@good --scope user
+claude plugin install off@good --scope user
+claude plugin install ok@good --scope user
+claude plugin install old@good --scope user
+claude plugin install quiet@good --scope user
+codex plugin list --json

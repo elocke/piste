@@ -1,0 +1,36 @@
+git ls-remote https://github.com/evil/x.git HEAD
+git ls-remote https://github.com/o/skills.git refs/tags/v1.2* refs/heads/v1.2
+git ls-remote https://github.com/o/skills.git HEAD
+git ls-remote https://github.com/o/skills.git HEAD
+git ls-remote https://github.com/o/drift.git HEAD
+git ls-remote https://github.com/o/good.git HEAD
+git ls-remote https://github.com/o/new.git HEAD
+git ls-remote https://github.com/o/src.git HEAD
+git ls-remote https://github.com/o/cfg.git refs/tags/main* refs/heads/main
+git clone --quiet https://github.com/o/good.git $WORK/.tmp/piste-agents-update-TMP/mirrors/good
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good rev-parse HEAD
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good fetch --quiet origin aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/good -c advice.detachedHead=false checkout --quiet aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+claude plugin marketplace add $WORK/.tmp/piste-agents-update-TMP/mirrors/good
+git clone --quiet https://github.com/o/new.git $WORK/.tmp/piste-agents-update-TMP/mirrors/new
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new rev-parse HEAD
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new fetch --quiet origin 9999999999999999999999999999999999999999
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/new -c advice.detachedHead=false checkout --quiet 9999999999999999999999999999999999999999
+claude plugin marketplace add $WORK/.tmp/piste-agents-update-TMP/mirrors/new
+claude plugin marketplace add o/src
+git clone --quiet https://github.com/o/cfg.git $WORK/.tmp/piste-agents-update-TMP/mirrors/urlm
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/urlm rev-parse HEAD
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/urlm fetch --quiet origin abababababababababababababababababababab
+git -C $WORK/.tmp/piste-agents-update-TMP/mirrors/urlm -c advice.detachedHead=false checkout --quiet abababababababababababababababababababab
+claude plugin marketplace add $WORK/.tmp/piste-agents-update-TMP/mirrors/urlm/plugins
+claude plugin install elsewhere@new --scope user
+claude plugin install float@src --scope user
+claude plugin install gone@urlm --scope user
+claude plugin install lsp@urlm --scope user
+claude plugin install missing@good --scope user
+claude plugin install off@good --scope user
+claude plugin install ok@good --scope user
+claude plugin install old@good --scope user
+claude plugin install pua@urlm --scope user
+claude plugin install quiet@good --scope user
+codex plugin list --json

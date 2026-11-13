@@ -1,0 +1,7 @@
+# A team layer: its zone, and the secrets its modules export
+# (env var = sops key path). `piste setup <this repo>` starts a person's own
+# overlay on it from template/.
+zone = "work"
+
+[secrets]
+EXAMPLE_TOKEN = "example/token"

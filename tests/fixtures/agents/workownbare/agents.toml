@@ -1,0 +1,11 @@
+# The same own items with no allow entry for their marketplace: the zone's
+# deny refuses it.
+[policy]
+extends = true
+
+[[claude.marketplace]]
+name   = "own"
+source = "github:example/own"
+
+[[claude.plugin]]
+id = "mine@own"

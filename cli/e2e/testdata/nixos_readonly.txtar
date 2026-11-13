@@ -1,0 +1,144 @@
+# The read-only commands on a NixOS machine whose overlay has its NixOS
+# host: the system's toplevel for build, dry and fix; nh os for gendiff; the
+# system profile for status and log; nh clean all; drift over the system's
+# configuration; adopt refused before any work. Then the both-kinds warning,
+# a failed nixosConfigurations eval (an error, never a silent home) and an
+# overlay without the attribute (no names: a home, as before NixOS hosts).
+# With that eval failing, status and log still read the system profile
+# (they need no overlay), with a warning. 15: a machine that is none of the
+# overlay's NixOS hosts and has no home there: adopt refuses as switch's
+# hostname guard does, before any scan. 16: drift whose finds Nix can't
+# provide: no extraPackages line, since there is nothing to add there.
+# Outputs are frozen in $GOLDEN/nixos_readonly.
+[!linux] skip 'a NixOS machine is Linux'
+
+chmod 0755 scenario.sh
+chmod 0755 bin/nix
+exec git init -q -b master flake
+exec git -C flake add flake.nix flake.lock
+exec git -C flake -c user.email=t@t -c user.name=t commit -q -m 'initial commit'
+env USER=tester
+env PATH=$WORK/bin${:}$PATH
+
+exec sh scenario.sh
+# Not vacuous: the shims were really reached.
+grep '^nix eval --json .*/flake#. --apply o: builtins.attrNames \(o.nixosConfigurations or \{ \}\) --no-write-lock-file$' out/01-build.calls
+grep '^nix build .*/flake#nixosConfigurations."testhost".config.system.build.toplevel$' out/01-build.calls
+grep '^nix build .*/flake#nixosConfigurations."testhost".config.system.build.toplevel --dry-run$' out/02-dry.calls
+grep '^nh os switch --dry .*/flake -H testhost$' out/03-gendiff.calls
+grep '^nh clean all --keep-since 30d --keep 5$' out/08-clean.calls
+grep '^1$' out/07-adopt-refused.rc
+grep '^adopt doesn.t support NixOS hosts yet: add the packages to your host.s piste.packages.extraPackages by hand$' out/07-adopt-refused.err
+grep 'o.nixosConfigurations or' out/07-adopt-refused.calls
+! grep '^(npm|pnpm|pip) ' out/07-adopt-refused.calls
+grep 'using the NixOS one' out/09-build-both.out
+grep '^1$' out/10-build-eval-fails.rc
+grep '^can.t read nixosConfigurations from .*/flake: error: example eval failure$' out/10-build-eval-fails.err
+! grep '^nix build' out/10-build-eval-fails.calls
+grep '^nix build .*/flake#homeConfigurations."tester@testhost".activationPackage$' out/11-build-no-nixos.calls
+grep '^nix build .*/flake#nixosConfigurations."testhost".config.system.build.toplevel --show-trace$' out/12-fix.calls
+grep '^0$' out/13-status-eval-fails.rc
+grep '^can.t read nixosConfigurations from .*/flake: error: example eval failure; this machine.s generations are the system.s$' out/13-status-eval-fails.out
+grep 'Last switch.*2026-01-02 15:04' out/13-status-eval-fails.out
+! grep . out/13-status-eval-fails.err
+grep '^0$' out/14-log-eval-fails.rc
+grep '^can.t read nixosConfigurations from .*/flake: error: example eval failure; this machine.s generations are the system.s$' out/14-log-eval-fails.out
+grep '/\.machine/profiles/system-42-link$' out/14-log-eval-fails.out
+! grep 'home-manager' out/14-log-eval-fails.calls
+grep '^1$' out/15-adopt-unmatched.rc
+grep '\AHostname .testhost. doesn.t match any nixosConfigurations\.\n  Declared: otherhost\n' out/15-adopt-unmatched.err
+grep '^  Add this machine: piste host add$' out/15-adopt-unmatched.err
+! grep '^(npm|pnpm|pip|cargo|brew) ' out/15-adopt-unmatched.calls
+! grep 'Scanning' out/15-adopt-unmatched.out
+grep 'piste adopt doesn.t support NixOS hosts yet: add the packages to your host.s piste.packages.extraPackages by hand\.' out/06-drift.out
+grep '^0$' out/16-drift-no-nixpkgs.rc
+grep '^Not declared$' out/16-drift-no-nixpkgs.out
+! grep 'extraPackages' out/16-drift-no-nixpkgs.out
+exec sh normalize.sh
+grep '^nix eval --json .*/flake#nixosConfigurations."testhost" --apply \(declared.nix\) \[ "leftpad" "githits" "stray" \]$' out/06-drift.calls
+cmpworkdir $WORK/out $GOLDEN/nixos_readonly
+
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out" "$WORK/replies"
+# A NixOS machine, its system profile switched to at a fixed time, and two
+# system generations.
+mkdir -p "$WORK/.machine/profiles" && touch "$WORK/.machine/NIXOS"
+touch -t 202601021504 "$WORK/.machine/profiles/system"
+touch "$WORK/.machine/profiles/system-41-link" "$WORK/.machine/profiles/system-42-link"
+cd "$WORK/flake"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+printf '["testhost"]' > "$WORK/replies/nix-eval"
+run 01-build build
+run 02-dry dry
+run 03-gendiff gendiff
+run 04-status status
+run 05-log log
+printf '{"dependencies": {"npm": {}, "leftpad": {}}}' > "$WORK/replies/npm"
+printf '[{"dependencies": {"githits": {}, "stray": {}}}]' > "$WORK/replies/pnpm"
+printf '[]' > "$WORK/replies/pip"
+run 06-drift drift
+run 07-adopt-refused adopt
+run 08-clean clean
+# This machine both as a NixOS host and as a home: the NixOS one, said once.
+printf '["testhost", "tester@testhost"]' > "$WORK/replies/nix-eval"
+run 09-build-both build
+NIXOS_EVAL=fails run 10-build-eval-fails build
+NIXOS_EVAL=absent run 11-build-no-nixos build
+printf '["testhost"]' > "$WORK/replies/nix-eval"
+PISTE_AI=none run 12-fix fix
+# The names eval fails: status and log read the system profile anyway.
+NIXOS_EVAL=fails run 13-status-eval-fails status
+NIXOS_EVAL=fails run 14-log-eval-fails log
+# None of the overlay's NixOS hosts, and no home for this machine.
+printf '["otherhost"]' > "$WORK/replies/nix-eval"
+run 15-adopt-unmatched adopt
+# Nothing found that nixpkgs has: leftpad declared nowhere, githits and
+# stray as before.
+printf '["testhost"]' > "$WORK/replies/nix-eval"
+printf '{"nix": ["stray"], "casks": [], "brews": [], "exclude": [], "files": {}, "pkgs": {}}' > "$WORK/declared.json"
+run 16-drift-no-nixpkgs drift
+exit 0
+-- normalize.sh --
+# Tables and panels are sized to the work dir path: keep their words only,
+# in C-locale order. An age since the epoch changes daily. (Portable sed:
+# no -i.)
+cd $WORK/out
+for f in *; do sed -E 's/-?[0-9]{4,} days/N days/g' "$f" > "$f.t" && mv "$f.t" "$f"; done
+# drift's eval applies declared.nix, inlined: keep only the names it gets.
+for f in 06-drift.calls 16-drift-no-nixpkgs.calls; do
+  sed -E 's/--apply \(.*\) \[ /--apply (declared.nix) [ /' "$f" > "$f.t" && mv "$f.t" "$f"
+done
+for f in 04-*.out 06-*.out 13-*.out 16-*.out; do
+  tr -cs 'A-Za-z0-9@.:/_-' '\n' < "$f" | grep -v -e '^/' -e '^flake$' | LC_ALL=C sort | tr '\n' ' ' > "$f.w"; mv "$f.w" "$f"
+done
+-- bin/nix --
+#!/bin/sh
+# nix: the configuration names from replies/nix-eval, drift's declared eval
+# from declared.json; NIXOS_EVAL=fails fails the nixosConfigurations eval,
+# NIXOS_EVAL=absent answers it as a flake without that output does (none).
+# The rest goes to the shared shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+case "$*" in
+*'--apply ('*) cat "$WORK/declared.json" ;;
+*'(o.nixosConfigurations or { })'*)
+  case "$NIXOS_EVAL" in
+  fails) echo 'error: example eval failure' >&2; exit 1 ;;
+  absent) echo '[]'; exit 0 ;;
+  esac
+  cat "$WORK/replies/nix-eval" ;;
+*) cat "$WORK/replies/nix-eval" ;;
+esac
+-- declared.json --
+{"nix": ["stray"], "casks": [], "brews": [], "exclude": [], "files": {}, "pkgs": {"leftpad": {"pname": "leftpad", "version": "1.3.0"}}}
+-- flake/flake.nix --
+{ outputs = { self }: { nixosConfigurations = { }; homeConfigurations = { }; }; }
+-- flake/flake.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}

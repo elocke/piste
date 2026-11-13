@@ -1,0 +1,5 @@
+piste-agents: running: claude plugin marketplace update piste-local
+piste-agents: running: claude plugin update piste-harness@piste-local
+piste-agents: updating owned hook entries in $WORK/h/.codex/hooks.json
+piste-agents: trusting Codex hook $WORK/h/.codex/hooks.json:pre_tool_use:1:0
+piste-agents sync: this generation declares no third-party items

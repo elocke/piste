@@ -1,0 +1,12 @@
+Target flake: $WORK/h/piste/overlays/personal
+╭───────────────────────╮
+│ Searching for 'jq'... │
+╰───────────────────────╯
+Checking nixpkgs...
+Checking homebrew...
+Search Results
+Source   Package  Note
+nixpkgs  jq       exact match -- recommended
+
+Recommendation: piste pkg add pkg jq
+  Add to packages-module.nix cli or dev list for cross-platform support.

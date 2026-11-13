@@ -1,0 +1,10 @@
+claude mcp list
+codex mcp list --json
+codex mcp list --json
+claude mcp add --scope user pw -- npx -y @playwright/mcp
+claude mcp add --scope user tool -e LOG=info -e HINDSIGHT_MCP_HARNESS=claude -- $WORK/h/bin/tool --flag
+claude mcp remove --scope user tool
+claude mcp add --scope user tool -e LOG=info -e HINDSIGHT_MCP_HARNESS=claude -- $WORK/h/bin/tool --flag
+claude mcp remove --scope user gw
+claude mcp add --scope user --transport http gw https://gw.example/mcp --header Authorization: Bearer ${GW_TOKEN}
+codex mcp add tool --env LOG=info --env HINDSIGHT_MCP_HARNESS=codex -- $WORK/h/bin/tool --flag

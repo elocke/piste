@@ -1,0 +1,37 @@
+# budget: measure the start-of-session context of a Claude
+# transcript (code-point lengths of json.dumps, banker's rounding), text and
+# --json, the threshold and the no-listing case. Its outputs are frozen in
+# $GOLDEN/budget.
+
+env G=$GOLDEN/budget
+mkdir projects/p1
+cp t.jsonl projects/p1/a.jsonl
+cp empty.jsonl projects/p1/b.jsonl
+
+exec piste agents budget --transcript t.jsonl
+cmpwork stdout $G/text.out
+stdout '^skills +3$'
+
+! exec piste agents budget --transcript t.jsonl --threshold 10 --json
+cmpwork stdout $G/threshold.json
+
+exec piste agents budget --projects projects
+cmpwork stdout $G/projects.out
+
+! exec piste agents budget --transcript empty.jsonl
+cmpwork stderr $G/empty.err
+
+-- empty.jsonl --
+{"type": "user"}
+-- t.jsonl --
+{"type": "user", "message": "hi"}
+not json {
+{"type": "attachment", "attachment": {"type": "agent_listing_delta", "addedTypes": ["a", "b"], "addedLines": ["- a: one", "- b: tw\u00f6"]}}
+{"type": "attachment", "attachment": {"type": "skill_listing", "skillCount": 3, "content": "- alpha: does a\n- beta\n- gamma: \u00fcn\u00efcode \ud83d\ude00"}}
+{"type": "attachment", "attachment": {"type": "skill_listing", "skillCount": 99, "content": "ignored second"}}
+{"type": "attachment", "attachment": {"type": "deferred_tools_delta", "addedNames": ["x", "y"], "addedLines": ["x: 1", "y: 2"]}}
+{"type": "attachment", "attachment": {"type": "mcp_instructions_delta", "addedBlocks": [{"server": "gateway", "text": "use \u00e9"}]}}
+{"type": "attachment", "attachment": {"type": "instructions", "files": [{"path": "CLAUDE.md", "size": 1.5}]}}
+{"type": "attachment", "attachment": {"type": "hook_additional_context", "hookEvent": "SessionStart", "hookName": "h1", "content": ["ctx \u2713", 2.0]}}
+{"type": "attachment", "attachment": {"type": "hook_additional_context", "hookEvent": "SessionStart", "hookName": "h1", "content": "dup ignored"}}
+{"type": "attachment", "attachment": {"type": "hook_additional_context", "hookEvent": "UserPromptSubmit", "hookName": "h2", "content": "prompt"}}

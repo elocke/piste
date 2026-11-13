@@ -1,0 +1,10 @@
+~ claude.marketplace drift: commit: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> dddddddddddddddddddddddddddddddddddddddd (https://github.com/o/drift/compare/bbbbbbbbbbbb...dddddddddddd)
+~ claude.marketplace src: commit: dddddddddddddddddddddddddddddddddddddddd -> ffffffffffffffffffffffffffffffffffffffff (https://github.com/o/src/compare/dddddddddddd...ffffffffffff)
+~ claude.plugin float@src: version: 1.0 -> 9.9.9; gitCommitSha: none -> ffffffffffffffffffffffffffffffffffffffff
+~ claude.plugin gone@urlm: version: unknown -> 9.9.9; gitCommitSha: none -> ffffffffffffffffffffffffffffffffffffffff
+~ claude.plugin lsp@urlm: version: unknown -> 9.9.9; gitCommitSha: none -> ffffffffffffffffffffffffffffffffffffffff
+~ claude.plugin old@good: gitCommitSha: none -> 3333333333333333333333333333333333333333
+~ claude.plugin pua@urlm: version: unknown -> 9.9.9; gitCommitSha: none -> ffffffffffffffffffffffffffffffffffffffff
+~ claude.plugin quiet@good: version: 1.0.0 -> 9.9.9; gitCommitSha: none -> ffffffffffffffffffffffffffffffffffffffff
+~ codex.plugin github@openai-curated: version: 0.0.1 -> 0.1.0
+wrote agents/agents.lock (base: base/agents.base.toml)

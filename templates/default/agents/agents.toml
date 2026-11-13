@@ -1,0 +1,3 @@
+# This overlay's agent zone (@zone@): third-party skills, plugins and MCP
+# servers it declares, beside the engine's shared zone. Empty to start; see
+# the engine's docs/agents-and-mcp.md. `piste agents check` audits it.

@@ -1,0 +1,10 @@
+manifest: $WORK/h/src/personal/agents/agents.toml
+host: testhost
+claude-code: stale config $WORK/h/.claude.json (Claude reads $WORK/h/.claude/.config.json); its servers are not live and are left untouched: elsewhere, gw, mine, oldc
+claude-code: elsewhere would be pruned (declared, but not for claude-code on this host)
+claude-code: undeclared, never removed: mine, oldc — declare it, or add it to `retired` to have --prune remove it
+claude-code: not ours (plugin/connector/other scope): claude.ai Gmail, plugin:githits:githits
+codex: old would be pruned (retired in the manifest)
+codex: undeclared, never removed: handmade — declare it, or add it to `retired` to have --prune remove it
+codex: not ours (plugin/connector/other scope): node_repl
+claude-desktop: 1 server(s) declared but this harness has no CLI — configure by hand

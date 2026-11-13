@@ -1,0 +1,285 @@
+# piste github: a GitHub account over SSH. gh and ssh-keygen are shims: gh
+# answers from $WORK/replies (gh-api-user is `gh api user`; the key lists are
+# gh-api-user_keys_per_page_100 and gh-api-user_ssh_signing_keys_per_page_100),
+# ssh-keygen makes a fake key. A fresh run makes the key, uploads it twice and
+# edits the overlay's host file; a second run skips all of that; a missing scope
+# and a key in use on another account each stop with exit 1; --dry-run changes
+# nothing.
+env USER=jane
+env GIT_AUTHOR_NAME=Jane GIT_AUTHOR_EMAIL=jane@example.com GIT_COMMITTER_NAME=Jane GIT_COMMITTER_EMAIL=jane@example.com
+exec git init -q ov
+exec git -C ov add .
+exec git -C ov commit -qm start
+mkdir $WORK/replies
+cp ov/hosts/testhost.nix $WORK/host.before
+cp $WORK/gh-user.json $WORK/replies/gh-api-user
+cp $WORK/empty-list.json $WORK/replies/gh-api-user_keys_per_page_100
+cp $WORK/empty-list.json $WORK/replies/gh-api-user_ssh_signing_keys_per_page_100
+cd ov
+
+# --dry-run: says what it would do, changes nothing.
+exec piste github --dry-run
+stdout '✓ gh is logged in as jane \(id 12345\)'
+stdout 'Would make the key ~/.ssh/id_ed25519_github_jane'
+stdout 'Would upload it to GitHub'
+stdout 'Would set piste.github for jane in hosts/testhost.nix'
+stdout 'Dry run: nothing changed'
+! exists $WORK/home/.ssh/id_ed25519_github_jane
+! grep 'ssh-keygen|ssh-key add' $WORK/calls
+cmp hosts/testhost.nix $WORK/host.before
+
+# No answer at the first question: stopped, nothing written.
+stdin $WORK/empty.txt
+! exec piste github
+stdout 'Stopped at a question'
+! exists $WORK/home/.ssh/id_ed25519_github_jane
+cmp hosts/testhost.nix $WORK/host.before
+
+# A fresh run: the key made, uploaded as both kinds, the host file edited and
+# staged, not committed.
+rm $WORK/calls
+exec piste github --yes
+stdout 'Made the key ~/.ssh/id_ed25519_github_jane'
+stdout 'ssh-keygen -p -f ~/.ssh/id_ed25519_github_jane'
+stdout 'Uploaded ~/.ssh/id_ed25519_github_jane.pub as a authentication key'
+stdout 'Uploaded ~/.ssh/id_ed25519_github_jane.pub as a signing key'
+stdout 'Set piste.github for jane in hosts/testhost.nix, staged'
+stdout 'Commits will use jane@example.com, which your overlay sets in home.nix'
+stdout 'Next: piste switch'
+stdout 'ssh -T git@github.com .*greets jane'
+grep '^ssh-keygen -q -t ed25519 -N  -C jane@github -f .*/home/.ssh/id_ed25519_github_jane$' $WORK/calls
+grep '^gh auth status' $WORK/calls
+grep '^gh ssh-key add .*/id_ed25519_github_jane.pub --type authentication --title id_ed25519_github_jane \(testhost\)$' $WORK/calls
+grep '^gh ssh-key add .*/id_ed25519_github_jane.pub --type signing --title id_ed25519_github_jane \(testhost\)$' $WORK/calls
+exists $WORK/home/.ssh/id_ed25519_github_jane.pub
+grep 'login = "jane";' hosts/testhost.nix
+grep 'id = 12345;' hosts/testhost.nix
+exec git status --porcelain
+stdout '^M  hosts/testhost.nix$'
+exec git log --oneline
+! stdout 'github'
+
+# Again: every step skipped (GitHub now lists the key, under another comment).
+cp $WORK/keys-with-key.json $WORK/replies/gh-api-user_keys_per_page_100
+cp $WORK/keys-with-key.json $WORK/replies/gh-api-user_ssh_signing_keys_per_page_100
+rm $WORK/calls
+cp hosts/testhost.nix $WORK/host.after
+exec piste github --yes
+stdout '✓ Key ~/.ssh/id_ed25519_github_jane exists'
+stdout '✓ The key is on your GitHub account'
+stdout '✓ hosts/testhost.nix already sets piste.github for jane'
+! grep 'ssh-keygen|ssh-key add' $WORK/calls
+cmp hosts/testhost.nix $WORK/host.after
+
+# A changed id replaces the block rather than adding a second.
+cp $WORK/gh-user2.json $WORK/replies/gh-api-user
+exec piste github --yes
+stdout 'Set piste.github for jane'
+grep 'id = 777;' hosts/testhost.nix
+! grep 'id = 12345;' hosts/testhost.nix
+cp $WORK/gh-user.json $WORK/replies/gh-api-user
+
+# A missing scope: the fix printed, exit 1.
+cp $WORK/empty-list.json $WORK/replies/gh-api-user_keys_per_page_100
+cp $WORK/empty-list.json $WORK/replies/gh-api-user_ssh_signing_keys_per_page_100
+cp $WORK/scope.txt $WORK/replies/gh-ssh-key
+env SHIM_EXIT_GH_SSH_KEY=1
+! exec piste github --yes --no-overlay --key $WORK/home/.ssh/second
+stderr 'needs the admin:public_key scope'
+stdout 'gh auth refresh -h github.com -s admin:public_key,admin:ssh_signing_key'
+
+# The key is in use on another account: explained, exit 1.
+cp $WORK/inuse.txt $WORK/replies/gh-ssh-key
+! exec piste github --yes --no-overlay --key $WORK/home/.ssh/second
+stderr 'already in use on another account'
+stderr 'one account only'
+env SHIM_EXIT_GH_SSH_KEY=
+rm $WORK/replies/gh-ssh-key
+
+# gh not logged in: the login command, exit 1.
+env SHIM_EXIT_GH_AUTH=1
+! exec piste github --yes
+stdout 'gh auth login --hostname github.com --git-protocol ssh --web --skip-ssh-key'
+env SHIM_EXIT_GH_AUTH=
+
+# A host file with nowhere to put the block: said by hand.
+cp $WORK/ov/hosts/other.nix hosts/testhost.nix
+exec piste github --yes
+stdout 'Add by hand: piste.github = \{ login = "jane"; id = 12345; \}; into .*/ov/hosts/testhost.nix'
+
+# A host whose name isn't the hostname (testhost): the file is the one flake.nix
+# lists for the host this machine's user@ profile names, and it has no
+# piste.checkout line.
+cd $WORK
+exec git init -q ov2
+exec git -C ov2 add .
+exec git -C ov2 commit -qm start
+cp $WORK/nix-eval.json $WORK/replies/nix-eval
+cd ov2
+cp hosts/devbox.nix $WORK/devbox.before
+exec piste github --yes --no-upload --dry-run
+stdout 'Would set piste.github for jane in hosts/devbox.nix'
+! stdout 'testhost'
+cmp hosts/devbox.nix $WORK/devbox.before
+exec piste github --yes --no-upload
+stdout 'Set piste.github for jane in hosts/devbox.nix, staged'
+! exists hosts/testhost.nix
+cmp hosts/devbox.nix $WORK/devbox.want
+exec git status --porcelain
+stdout '^M  hosts/devbox.nix$'
+# Run again: already set, nothing changes.
+exec piste github --yes --no-upload
+stdout 'hosts/devbox.nix already sets piste.github for jane'
+cmp hosts/devbox.nix $WORK/devbox.want
+# The home is named with flake.nix's user, as build names it, not $USER's.
+env USER=jdoe
+exec piste github --yes --no-upload --dry-run
+stdout 'hosts/devbox.nix already sets piste.github for jane'
+env USER=jane
+# --host still names a host explicitly; the file is the one flake.nix lists for it.
+! exec piste github --yes --no-upload --host nosuch
+stderr 'no host file hosts/nosuch.nix \(--host\)'
+exec piste github --yes --no-upload --host jane@devbox --dry-run
+stdout 'hosts/devbox.nix already sets'
+# By hostname, as build and switch take it: the host is <user>@<hostname>.
+exec piste github --yes --no-upload --host devbox --dry-run
+stdout 'hosts/devbox.nix already sets'
+rm $WORK/replies/nix-eval
+
+# A Mac-style host: the machine's name (JM0001, or testhost) is an alias of the host
+# jane-mac, whose key is bare in flake.nix; the eval lists both names.
+cd $WORK
+exec git init -q ov3
+exec git -C ov3 add .
+exec git -C ov3 commit -qm start
+cp $WORK/nix-eval3.json $WORK/replies/nix-eval
+cd ov3
+exec piste github --yes --no-upload --dry-run --host JM0001
+stdout 'Would set piste.github for jane in hosts/jane-mac.nix'
+! stdout 'Add by hand'
+# On a Mac, with no --host, the hostname (testhost, an alias here) finds it too.
+[darwin] exec piste github --yes --no-upload --dry-run
+[darwin] stdout 'Would set piste.github for jane in hosts/jane-mac.nix'
+[darwin] ! stdout 'Add by hand'
+exec piste github --yes --no-upload --host JM0001
+stdout 'Set piste.github for jane in hosts/jane-mac.nix, staged'
+grep 'id = 12345;' hosts/jane-mac.nix
+rm $WORK/replies/nix-eval
+
+-- ov2/flake.nix --
+{
+  outputs = inputs: inputs.piste.lib.mkFlake {
+    user = "jane";
+    hosts."jane@devbox" = {
+      system = "x86_64-linux";
+      modules = [ ./hosts/devbox.nix ];
+    };
+  };
+}
+-- ov2/home.nix --
+{ ... }: { programs.git.settings.user.name = "Jane Doe"; }
+-- ov2/hosts/devbox.nix --
+{ user, pkgs, piste, ... }:
+
+{
+  imports = [ piste.homeManagerModules.dev ../home.nix ];
+
+  # A comment
+  piste.programs.zellij.timezone = "America/New_York";
+
+  targets.genericLinux.enable = true;
+
+  piste.packages = {
+    terminal.enable = false;
+    extraPackages = [ pkgs.hello ];
+  };
+
+  home.stateVersion = "24.05";
+}
+-- devbox.want --
+{ user, pkgs, piste, ... }:
+
+{
+  imports = [ piste.homeManagerModules.dev ../home.nix ];
+
+  # A comment
+  piste.programs.zellij.timezone = "America/New_York";
+
+  targets.genericLinux.enable = true;
+
+  piste.packages = {
+    terminal.enable = false;
+    extraPackages = [ pkgs.hello ];
+  };
+
+  piste.github = {
+    login = "jane";
+    id = 12345;
+  };
+
+  home.stateVersion = "24.05";
+}
+-- nix-eval.json --
+["jane@devbox"]
+
+-- ov/flake.nix --
+{ outputs = _: { }; }
+-- ov/home.nix --
+{ ... }: { programs.git.settings.user = { name = "Jane Doe"; email = "jane@example.com"; }; }
+-- ov/hosts/testhost.nix --
+{ config, pkgs, user, ... }:
+{
+  imports = [ ../home.nix ];
+
+  piste.checkout = "/home/user/piste";
+}
+-- ov/hosts/other.nix --
+{ ... }: { }
+-- empty.txt --
+-- gh-user.json --
+{"login":"jane","id":12345}
+-- gh-user2.json --
+{"login":"jane","id":777}
+-- empty-list.json --
+[]
+-- keys-with-key.json --
+[{"id":1,"key":"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleExampleExampleExample jane@github","title":"x"}]
+-- scope.txt --
+This API operation needs the "admin:public_key" scope. To request it, run:  gh auth refresh -h github.com -s admin:public_key
+-- inuse.txt --
+HTTP 422: key is already in use (https://api.github.com/user/keys)
+-- ov3/flake.nix --
+{
+  outputs = inputs@{ self, piste, ... }: piste.lib.mkFlake {
+    user = "jane";
+    hosts = {
+      # `jane-mac` is the canonical name; `JM0001` is the machine's hostname,
+      # an alias so the hostname guard passes (a path-ish name: 86-foo.nix).
+      jane-mac = {
+        system = "aarch64-darwin";
+        aliases = [ "JM0001" "testhost" ];
+        modules = [ ./hosts/jane-mac.nix ];
+      };
+      "jane@devbox" = {
+        system = "x86_64-linux";
+        modules = [ ./hosts/devbox.nix ];
+      };
+    };
+  };
+}
+-- ov3/home.nix --
+{ ... }: { programs.git.settings.user.name = "Jane Doe"; }
+-- ov3/hosts/jane-mac.nix --
+{ user, piste, pkgs, ... }:
+{
+  home-manager.users.${user} =
+    { config, ... }:
+    {
+      imports = [ ../home.nix ];
+      home.stateVersion = "26.11";
+    };
+}
+-- ov3/hosts/devbox.nix --
+{ ... }: { }
+-- nix-eval3.json --
+["JM0001", "jane-mac", "testhost"]

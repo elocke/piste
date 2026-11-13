@@ -1,0 +1,17 @@
+# codex_deny_prefix: the real `codex execpolicy
+# check` on the rendered rules: rm -rf / forbidden, git status allow.
+[!tint] skip 'integration test: PISTE_TINT=1 with codex on PATH'
+[!exec:codex] skip 'codex not on PATH'
+
+mkdir proj/.git
+cd proj
+exec piste agents add shared:permission/no-rm-rf shared:permission/git-status $RS
+exec codex execpolicy check --rules .codex/rules/piste.rules rm -rf /
+stdout '"decision":"forbidden"}$'
+exec codex execpolicy check --rules .codex/rules/piste.rules git status
+stdout '"decision":"allow"}$'
+exec codex execpolicy check --rules .codex/rules/piste.rules ls
+! stdout forbidden
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

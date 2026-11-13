@@ -1,0 +1,5 @@
+flake.nix
+hosts/box/default.nix
+hosts/box/machine/channels.nix
+hosts/box/machine/configuration.nix
+hosts/box/machine/users.nix

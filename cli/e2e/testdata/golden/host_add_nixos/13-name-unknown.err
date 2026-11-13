@@ -1,0 +1,1 @@
+testhost is already a host in this overlay, and piste can't tell whether it is this machine (its root, $WORK/dev/disk/by-label/nixos, is a label every machine made from one image has): if it is, run piste host add --name testhost; else give this machine its own name with --name

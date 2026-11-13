@@ -1,0 +1,25 @@
+name: agents
+
+on:
+  pull_request:
+  # update-flake-lock dispatches this onto its PR branch (a PR opened with
+  # GITHUB_TOKEN starts no workflows, so the required check would never report).
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  agents:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Skill lint (shared zone)
+        run: agents/scripts/lint.sh
+      # The agent hooks (piste-guard, subagent guards); the engine is tested in Go
+      # (piste.yml) and the Nix resolver as the agents-resolver flake check.
+      - name: Agent hook tests
+        run: python3 -m unittest discover -s tests/agents -v

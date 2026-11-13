@@ -1,0 +1,9 @@
+version = 1
+
+[[skill]]
+name    = "thirdp"
+source  = "github:example/thirdp"
+path    = "skills/other"
+ref     = "0000000000000000000000000000000000000000"
+commit  = "1111111111111111111111111111111111111111"
+narHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="

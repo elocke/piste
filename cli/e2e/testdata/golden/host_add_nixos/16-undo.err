@@ -1,0 +1,1 @@
+nix eval of overlays/bare doesn't list gone after adding its entry (its hosts aren't a set piste can add to): flake.nix is back as it was and hosts/gone removed. Add the entry to its hosts by hand:

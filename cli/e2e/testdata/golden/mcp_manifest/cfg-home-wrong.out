@@ -1,0 +1,2 @@
+manifest: $WORK/h/src/personal/agents/agents.toml
+host: testhost

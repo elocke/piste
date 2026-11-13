@@ -1,0 +1,262 @@
+# piste pkgs update: the engine's newest release and this overlay's pin to
+# it, the overlay's inputs, a build with the version diff, the switch, then
+# the pnpm globals. git is real (a file:// remote with release tags); nix, nh
+# and home-manager are shimmed, and a fake piste-pnpm logs its argv to
+# $WORK/calls with theirs, so the order shows. A Linux home: the Mac's
+# Homebrew step is tested in internal/cli/pkgsupdate_test.go.
+[!linux] skip 'a Linux home: the Mac steps are in pkgsupdate_test.go'
+env USER=jane
+exec sh mkremote.sh
+cd $WORK/home/piste/overlays/mine
+mkdir $WORK/fakebin
+cp $WORK/piste-pnpm $WORK/fakebin/piste-pnpm
+chmod 0755 $WORK/fakebin/piste-pnpm
+env PATH=$WORK/fakebin:$PATH
+
+# The flags: an error before anything runs.
+! exec piste pkgs update --only brew
+stderr '^brew: Homebrew is managed on a Mac only$'
+! exec piste pkgs update --yes --no-switch
+stderr '--yes'
+stderr '--no-switch'
+! exec piste pkgs update --only npm
+stderr '--only "npm"'
+! exec piste pkgs update --no-switch --only pnpm
+stderr '^--no-switch changes nothing on this machine and --only pnpm or brew upgrades it: give one of them$'
+! exists $WORK/calls
+exec git -C $WORK/home/piste tag --points-at HEAD
+stdout '^v0.1.0$'
+
+# --dry-run: the moves and the upgrades it would make, nothing changed.
+exec piste pkgs update --dry-run
+cmpwork stdout $GOLDEN/pkgs_update/dry-run.txt
+stdout 'Would move piste: v0.1.0 → v0.1.1'
+stdout 'Would move overlays/mine: engine v0.1.0 → v0.1.1'
+stdout 'would upgrade tsx'
+stdout 'Dry run: nothing changed.'
+! grep 'nix flake update' $WORK/calls
+! grep '^nh ' $WORK/calls
+! grep '^home-manager' $WORK/calls
+! grep 'piste-pnpm upgrade' $WORK/calls
+exec git -C $WORK/home/piste tag --points-at HEAD
+stdout '^v0.1.0$'
+cmp flake.nix $WORK/mine.flake.nix
+exec sh $WORK/reset.sh
+
+# No --yes and no terminal (stdin at its end): built, not switched, no
+# upgrade, exit 0. The overlay's changes are left to commit.
+exec piste pkgs update
+cmpwork stdout $GOLDEN/pkgs_update/declined.txt
+stdout 'Not switched: nothing on this machine changed. To apply: piste switch'
+stdout 'Commit overlays/mine.s flake.nix and flake.lock once it works.'
+grep '^nix flake update --flake \S+/overlays/mine$' $WORK/calls
+grep '^nh home switch --dry ' $WORK/calls
+! grep '^home-manager' $WORK/calls
+! grep 'piste-pnpm' $WORK/calls
+exec sh $WORK/reset.sh
+
+# The build fails, even with --yes: no switch, no upgrade; piste fix's hint
+# and the commit hint; exit 1.
+env SHIM_EXIT_NH=1
+! exec piste pkgs update --yes
+stderr 'Build failed \(exit code 1\)'
+stdout 'To have Claude Code fix it: piste fix'
+stdout 'Commit overlays/mine.s flake.nix and flake.lock once it works.'
+grep '^nh home switch --dry ' $WORK/calls
+! grep '^home-manager' $WORK/calls
+! grep 'piste-pnpm' $WORK/calls
+env SHIM_EXIT_NH=
+exec sh $WORK/reset.sh
+
+# --no-switch: built, not switched, no upgrade.
+exec piste pkgs update --no-switch
+stdout 'Not switched \(--no-switch\): nothing on this machine changed. To apply: piste switch'
+grep '^nh home switch --dry ' $WORK/calls
+! grep '^home-manager' $WORK/calls
+! grep 'piste-pnpm' $WORK/calls
+exec sh $WORK/reset.sh
+
+# The switch refuses (a secrets file with values, not encrypted, as piste
+# switch refuses it), even with --yes: exit 1, and no pnpm or Homebrew
+# upgrade after it.
+mkdir secrets
+cp $WORK/plain.sops.yaml secrets/api-keys.sops.yaml
+! exec piste pkgs update --yes
+stderr 'secrets/api-keys.sops.yaml holds values but isn.t encrypted'
+! stdout 'Switch complete!'
+grep '^nh home switch --dry ' $WORK/calls
+! grep '^home-manager' $WORK/calls
+! grep 'piste-pnpm' $WORK/calls
+! grep '^brew' $WORK/calls
+rm secrets
+exec sh $WORK/reset.sh
+
+# --yes: the checkout to v0.1.1, this overlay's pin and inputs, the build
+# with its diff, the switch (its own calls, as piste switch's goldens have
+# them for a home), then the pnpm globals. The other overlay's pin is named
+# and left.
+exec piste pkgs update --yes
+cmpwork stdout $GOLDEN/pkgs_update/yes.txt
+! stderr .
+stdout 'piste: v0.1.0 → v0.1.1'
+stdout 'overlays/other.s engine is on v0.1.0: piste update moves it'
+stdout 'Switch complete!'
+stdout 'Commit overlays/mine.s flake.nix and flake.lock once it works.'
+exec sh -c 'sed "s/ backup-[0-9]*/ backup-N/" "$WORK/calls" > "$WORK/yes.calls"'
+cmpwork $WORK/yes.calls $GOLDEN/pkgs_update/yes.calls
+grep '(?s)^nix flake update --flake \S+/overlays/mine\nnh home switch --dry \S+/overlays/mine --override-input piste git\+file://\S+/home/piste\n.*home-manager switch -b backup-N --flake \S+/overlays/mine#jane@testhost --override-input piste git\+file://\S+/home/piste\npiste-pnpm upgrade\n$' $WORK/yes.calls
+exec git -C $WORK/home/piste tag --points-at HEAD
+stdout '^v0.1.1$'
+grep 'piste.url = "github:example/piste/v0.1.1";' flake.nix
+cmp $WORK/home/piste/overlays/other/flake.nix $WORK/other.flake.nix
+
+# Answered y, and the pnpm upgrade fails: a warning, the switch stands, exit
+# 1 at the end. Nothing moved this time: no commit hint.
+rm $WORK/calls
+env PNPM_UPGRADE_EXIT=1
+stdin $WORK/y.txt
+! exec piste pkgs update
+stdout 'You.re on v0.1.1, the newest release.'
+stdout 'Switch complete!'
+stdout 'pnpm globals: some didn.t upgrade'
+stdout 'piste pkgs update --only pnpm'
+! stdout 'Commit overlays'
+grep '^home-manager switch ' $WORK/calls
+grep '^piste-pnpm upgrade$' $WORK/calls
+env PNPM_UPGRADE_EXIT=
+
+# --only pnpm: the upgrade alone, against what is switched: no git move, no
+# nix, no build.
+exec sh $WORK/reset.sh
+exec piste pkgs update --only pnpm
+cmp $WORK/calls $WORK/only-pnpm.calls
+! stdout 'Fetching'
+exec git -C $WORK/home/piste tag --points-at HEAD
+stdout '^v0.1.0$'
+
+# No piste-pnpm on the profile (no pnpm globals declared): one line, exit 0.
+rm $WORK/calls
+rm $WORK/fakebin/piste-pnpm
+exec piste pkgs update --only pnpm
+stdout '^pnpm globals: none declared \(piste.packages.pnpm in home.nix\)$'
+! stderr .
+! exists $WORK/calls
+
+# A release between the checkout's and the newest has Upgrading notes: the
+# notes, then a reminder right before the question; with --yes, right
+# before the switch, which still runs.
+exec sh $WORK/reset.sh
+exec sh $WORK/release.sh
+exec piste pkgs update
+stdout '^  Upgrading:$'
+stdout '(?m)^Read the Upgrading notes above: your overlay may need a change for this release\.\nSwitch now\? '
+stdout 'Not switched'
+exec sh $WORK/reset.sh
+exec piste pkgs update --yes
+stdout '^  Upgrading:$'
+stdout '(?s)Version changes:.*\nRead the Upgrading notes above: your overlay may need a change for this release\.\n.*Building and switching\.\.\.\n.*Switch complete!'
+grep '^home-manager switch ' $WORK/calls
+
+-- y.txt --
+y
+-- plain.sops.yaml --
+example:
+  token: x
+-- changelog.md --
+# Changelog
+
+## Unreleased
+
+## v0.1.2 (2026-03-01)
+- Second.
+### Upgrading
+- Rename piste.foo to piste.bar in your hosts.
+
+## v0.1.1 (2026-02-01)
+- First.
+-- release.sh --
+set -e
+cd "$WORK/src"
+cp "$WORK/changelog.md" CHANGELOG.md
+git add -A
+git -c user.name=t -c user.email=t@example.com commit -q -m v0.1.2
+git tag v0.1.2
+git push -q "$WORK/remote/piste.git" main v0.1.2
+-- only-pnpm.calls --
+piste-pnpm upgrade
+-- piste-pnpm --
+#!/bin/sh
+echo "piste-pnpm $*" >> "$WORK/calls"
+case "$1" in
+outdated) printf 'tsx\t4.0.0\t4.19.0\n' ;;
+upgrade) exit "${PNPM_UPGRADE_EXIT:-0}" ;;
+esac
+-- reset.sh --
+git -C "$WORK/home/piste" -c advice.detachedHead=false checkout -q v0.1.0
+cp "$WORK/mine.flake.nix" "$WORK/home/piste/overlays/mine/flake.nix"
+rm -f "$WORK/calls"
+-- mkremote.sh --
+set -e
+c() { git add -A && git -c user.name=t -c user.email=t@example.com commit -q -m "$1" && git tag "$1"; }
+mkdir -p src && cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+git init -q -b main
+c v0.1.0
+echo 2 > VERSION && c v0.1.1
+cd ..
+mkdir -p remote && git clone -q --bare src remote/piste.git
+git -c advice.detachedHead=false clone -q --branch v0.1.0 remote/piste.git home/piste
+for o in mine other; do mkdir -p home/piste/overlays/$o; done
+cp "$WORK/mine.flake.nix" home/piste/overlays/mine/flake.nix
+cp "$WORK/mine.flake.lock" home/piste/overlays/mine/flake.lock
+cp "$WORK/other.flake.nix" home/piste/overlays/other/flake.nix
+# The overlay's homes, and a version diff from nh's dry switch.
+mkdir -p "$WORK/replies"
+printf '["jane@testhost"]\n' > "$WORK/replies/nix-eval"
+printf 'Version changes:\n[U.]  gh  2.60.0 -> 2.62.0\n' > "$WORK/replies/nh"
+-- mine.flake.nix --
+{
+  inputs = {
+    piste.url = "github:example/piste/v0.1.0";
+    nixpkgs.follows = "piste/nixpkgs";
+    worktrunk.url = "github:example/worktrunk";
+  };
+  outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake {
+    inherit inputs self;
+    user = "jane";
+    zone = "personal";
+    hosts = { };
+  };
+}
+-- mine.flake.lock --
+{
+  "nodes": {
+    "root": {
+      "inputs": { "piste": "piste", "nixpkgs": ["piste", "nixpkgs"], "worktrunk": "worktrunk" }
+    },
+    "piste": {
+      "inputs": { "nixpkgs": "nixpkgs" },
+      "locked": { "type": "github", "owner": "example", "repo": "piste", "rev": "aaa", "lastModified": 1767225600 }
+    },
+    "nixpkgs": {
+      "locked": { "type": "github", "owner": "nixos", "repo": "nixpkgs", "rev": "bbb", "lastModified": 1768000000 }
+    },
+    "worktrunk": {
+      "locked": { "type": "github", "owner": "example", "repo": "worktrunk", "rev": "ccc", "lastModified": 1770000000 }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+-- other.flake.nix --
+{
+  inputs.piste.url = "github:example/piste/v0.1.0";
+  outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake {
+    inherit inputs self;
+    user = "jane";
+    zone = "personal";
+    hosts = { };
+  };
+}

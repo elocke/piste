@@ -1,0 +1,3 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+nix build $WORK/flake#nixosConfigurations."testhost".config.system.build.toplevel --show-trace

@@ -1,0 +1,13 @@
+{
+  "zone": "agent",
+  "sources": [
+    {
+      "name": "piste-agents",
+      "zone": "shared"
+    },
+    {
+      "name": "agent",
+      "zone": "agent"
+    }
+  ]
+}

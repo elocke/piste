@@ -1,0 +1,64 @@
+# piste update-overlays from herdr's release feed (@overlay-update herdr:<kind>):
+# the version and each target's sha256 come from releases.herdr.dev/<kind>/latest.json,
+# nothing is prefetched; the file's other packages are left alone.
+env USER=tester
+cd ck
+exec git init -q
+
+exec piste update-overlays --dry-run
+stdout '71-app +0\.1\.6 +0\.1\.7 +update available'
+grep 'version = "0.1.6"' pkgs/overlays/71-app.nix
+
+exec piste update-overlays
+grep 'version = "0.1.7"' pkgs/overlays/71-app.nix
+grep 'hash = "81af774cb0d934bf6c52b334b53270417d0d8f1d057148f97dbc2285568db11a"' pkgs/overlays/71-app.nix
+! grep 'hash = "old' pkgs/overlays/71-app.nix
+grep '^curl -fsSL https://releases.herdr.dev/app/latest.json$' $WORK/calls
+! grep 'nix-prefetch-url' $WORK/calls
+stdout '71-app +0\.1\.6 +0\.1\.7 +updated'
+
+# Up to date: nothing written.
+exec piste update-overlays
+stdout '71-app +0\.1\.7 +0\.1\.7 +up-to-date'
+
+# A target the feed doesn't have: refused, the file untouched.
+cp $WORK/fx/72-gone.nix pkgs/overlays/72-gone.nix
+exec piste update-overlays
+stdout '72-gone .*missing asset: herdr-app-plan9-mips.tar.gz'
+grep 'version = "0.1.6"' pkgs/overlays/72-gone.nix
+
+-- replies/curl --
+{
+  "version": "0.1.7",
+  "targets": {
+    "macos-aarch64": {
+      "url": "https://releases.herdr.dev/app/0.1.7/herdr-app-macos-aarch64.tar.gz",
+      "sha256": "81af774cb0d934bf6c52b334b53270417d0d8f1d057148f97dbc2285568db11a"
+    }
+  }
+}
+-- ck/.piste --
+-- ck/flake.nix --
+{ outputs = _: { }; }
+-- ck/pkgs/overlays/71-app.nix --
+# @overlay-update herdr:app
+self: super: {
+  app = super.stdenvNoCC.mkDerivation {
+    version = "0.1.6";
+    platformMap = {
+      "aarch64-darwin" = {
+        asset = "herdr-app-macos-aarch64.tar.gz";
+        hash = "old0000000000000000000000000000000000000000000000000000000000000";
+      };
+    };
+  };
+}
+-- fx/72-gone.nix --
+# @overlay-update herdr:app
+self: super: {
+  gone = {
+    version = "0.1.6";
+    asset = "herdr-app-plan9-mips.tar.gz";
+    hash = "old";
+  };
+}

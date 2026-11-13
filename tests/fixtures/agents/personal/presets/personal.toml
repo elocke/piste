@@ -1,0 +1,3 @@
+targets = ["claude", "codex"]
+skills = ["beta", "thirdp2", "alpha"]
+instructions = ["extra"]

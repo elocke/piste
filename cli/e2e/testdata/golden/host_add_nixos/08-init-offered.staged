@@ -1,0 +1,12 @@
+.gitignore
+AGENTS.md
+CLAUDE.md
+README.md
+agents/agents.toml
+agents/presets/default.toml
+flake.nix
+home.nix
+hosts/box/default.nix
+hosts/box/machine/channels.nix
+hosts/box/machine/configuration.nix
+hosts/box/machine/users.nix

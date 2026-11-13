@@ -1,0 +1,6 @@
+╭───────────────────────────────────╮
+│ Overlay package updates (dry run) │
+╰───────────────────────────────────╯
+Checking o/tool...
+Package  Current  Latest  Status
+30-tool  1.0.0    2.0.0   update available

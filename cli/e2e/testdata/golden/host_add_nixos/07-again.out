@@ -1,0 +1,6 @@
+overlays/mine already has testhost
+Flake: $WORK/ck/overlays/mine (checkout $WORK/ck: overlay mine (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+  To keep it: git -C $WORK/ck/overlays/mine commit -m 'Add testhost' -- flake.nix hosts/testhost && git -C $WORK/ck/overlays/mine push

@@ -1,0 +1,9 @@
+Updating flake input: home-manager...
+╭────────────────────────────╮
+│ Flake input update summary │
+╰────────────────────────────╯
+Input         Before      After       Jump  Status
+home-manager  2026-09-21  2026-09-21  -     unchanged
+nixpkgs       2023-11-14  2023-11-14  -     unchanged
+
+All inputs already up to date.

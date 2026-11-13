@@ -1,0 +1,1 @@
+Error: $WORK/h/src/personal/agents/agents.toml: server 'bad': hosts must be a non-empty list of host names, or omitted entirely to mean 'all hosts'

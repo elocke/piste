@@ -1,0 +1,35 @@
+# no_injected_keys: the harness files show only declared keys.
+
+mkdir proj/.git
+cd proj
+exec piste agents add shared:mcp/demo $RS
+
+cmp .codex/config.toml want.toml
+cmp .mcp.json want.json
+! exists .claude/settings.json
+! exists .codex/hooks.json
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/want.toml --
+# >>> piste:managed mcp
+[mcp_servers.demo]
+args = ['--stdio']
+command = 'demo-mcp'
+env_vars = ['DEMO_TOKEN']
+# <<< piste:managed mcp
+-- proj/want.json --
+{
+  "mcpServers": {
+    "demo": {
+      "args": [
+        "--stdio"
+      ],
+      "command": "demo-mcp",
+      "env": {
+        "DEMO_TOKEN": "${DEMO_TOKEN}"
+      }
+    }
+  }
+}

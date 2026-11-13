@@ -1,0 +1,140 @@
+# piste add <url>: clone an existing overlay into overlays/<name>/,
+# refuse what isn't a piste (mkFlake) overlay or a name already there, build
+# it when its hosts include this machine; a package name gets the
+# `piste pkg add` hint. The checkout's own git state is never touched.
+env USER=jane
+exec sh mkrepos.sh
+
+# Outside a checkout: refused.
+! exec piste add file://$WORK/remote/mine.git
+stderr 'run inside a piste checkout'
+
+cd ck
+
+# Its hosts include this machine: cloned and built.
+cp $WORK/hosts-here.json $WORK/replies/nix
+exec piste add file://$WORK/remote/mine.git
+exists overlays/mine/flake.nix
+grep '^(nix build|darwin-rebuild build) .*overlays/mine' $WORK/calls
+
+# --name picks the directory.
+exec piste add --name other file://$WORK/remote/mine.git
+exists overlays/other/flake.nix
+
+# The same name again: refused.
+! exec piste add file://$WORK/remote/mine.git
+stderr 'overlays/mine exists'
+
+# Not a piste overlay: refused, and the clone is gone.
+! exec piste add file://$WORK/remote/plain.git
+stderr 'not a piste overlay'
+! exists overlays/plain
+
+# No host for this machine: added, not built, told what to do.
+cp $WORK/hosts-elsewhere.json $WORK/replies/nix
+rm $WORK/calls
+exec piste add --name away file://$WORK/remote/mine.git
+exists overlays/away/flake.nix
+[!darwin] stdout 'has no host for this machine \(jane@testhost\): piste host add --overlay away adds it'
+[darwin] stdout 'has no host for this machine \(testhost\): piste host add --overlay away adds it'
+! grep '^(nix build|darwin-rebuild build) ' $WORK/calls
+
+# A relative path is relative to where the user is, not to overlays/.
+exec piste add --name rel ../remote/mine.git
+exists overlays/rel/flake.nix
+
+# An overlay made by piste init links its skills from overlays/<its name>/:
+# add puts it there, whatever the repo is called; a --name that differs warns.
+exec piste add file://$WORK/remote/dotfiles.git
+exists overlays/personal/hosts/box.nix
+! exists overlays/dotfiles
+exec piste add --name elsewhere file://$WORK/remote/dotfiles.git
+exists overlays/elsewhere/hosts/box.nix
+stdout 'link its skills from overlays/personal'
+
+# A package name instead of a git URL: pointed at piste pkg add.
+! exec piste add jq
+stderr 'piste pkg add jq'
+! exec piste add
+stderr 'one git URL'
+! stderr 'pkg add'
+! exec piste add cask x
+stderr 'piste pkg add cask x'
+! exec piste add --ai 'a json tool'
+stderr 'piste pkg add'
+! exec piste add --shared jq
+stderr 'piste pkg add'
+
+# The engine's mkFlake by another spelling: added.
+exec piste add --name inh file://$WORK/remote/inh.git
+exists overlays/inh/flake.nix
+
+# flake-parts' mkFlake isn't the engine's: refused.
+! exec piste add file://$WORK/remote/parts.git
+stderr 'not a piste overlay'
+! exists overlays/parts
+
+# The checkout's own git state is untouched (overlays/ is ignored).
+exec git status --porcelain
+! stdout .
+
+# On a NixOS machine: an overlay with this machine's NixOS host builds its
+# system; one with no host for it names the hostname, its NixOS host's key.
+[!linux] stop 'a NixOS machine is Linux'
+mkdir $WORK/.machine
+cp $WORK/empty $WORK/.machine/NIXOS
+chmod 0755 $WORK/bin/nix
+env PATH=$WORK/bin${:}$PATH
+cp $WORK/hosts-nixos.json $WORK/replies/hosts.json
+rm $WORK/calls
+exec piste add --name nixhere file://$WORK/remote/mine.git
+grep '^nix eval --json .*/ck/overlays/nixhere#. --override-input piste git\+file://.*/ck --apply o: builtins.attrNames \(o.nixosConfigurations or \{ \}\) --no-write-lock-file$' $WORK/calls
+grep '^nix build .*/ck/overlays/nixhere#nixosConfigurations."testhost".config.system.build.toplevel --override-input piste git\+file://.*/ck$' $WORK/calls
+cp $WORK/hosts-elsewhere.json $WORK/replies/hosts.json
+rm $WORK/calls
+exec piste add --name nixaway file://$WORK/remote/mine.git
+stdout 'has no host for this machine \(testhost\): piste host add --overlay nixaway adds it'
+! grep '^nix build ' $WORK/calls
+
+-- hosts-here.json --
+{"darwin": ["testhost"], "home": ["jane@testhost"]}
+-- hosts-elsewhere.json --
+{"darwin": ["othermac"], "home": ["jane@otherbox"]}
+-- hosts-nixos.json --
+{"darwin": [], "home": [], "nixos": ["testhost"]}
+-- empty --
+-- bin/nix --
+#!/bin/sh
+# nix on a NixOS machine: the hosts eval from replies/hosts.json, the
+# nixosConfigurations names from its "nixos" list; the rest goes to the
+# shared shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+case "$*" in
+*'o: builtins.attrNames (o.nixosConfigurations or { })'*) sed -n 's/.*"nixos": \(\[[^]]*\]\).*/\1/p' "$WORK/replies/hosts.json" ;;
+*) cat "$WORK/replies/hosts.json" ;;
+esac
+-- mkrepos.sh --
+set -e
+mkdir -p replies
+repo() { # name flake-body
+  mkdir "src-$1" && cd "src-$1"
+  printf '%s\n' "$2" > flake.nix
+  git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+  cd .. && mkdir -p remote && git clone -q --bare "src-$1" "remote/$1.git"
+}
+repo mine '{ outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }'
+repo plain '{ outputs = _: { }; }'
+repo inh '{ outputs = inputs@{ piste, self, ... }: let inherit (piste.lib) mkFlake; in mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }'
+repo parts '{ outputs = inputs@{ flake-parts, ... }: flake-parts.lib.mkFlake { inherit inputs; } { systems = [ ]; }; }'
+# An init-made overlay: its host file names the overlay dir it expects.
+mkdir src-dotfiles && cd src-dotfiles
+printf '%s\n' '{ outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }' > flake.nix
+mkdir hosts && printf '%s\n' '{ config, ... }: { piste.agents.sources.personal-agents.workdir = "${config.piste.checkout}/overlays/personal/agents"; }' > hosts/box.nix
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+cd .. && git clone -q --bare src-dotfiles remote/dotfiles.git
+mkdir ck && cd ck
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init

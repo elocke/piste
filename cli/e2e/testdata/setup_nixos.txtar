@@ -1,0 +1,302 @@
+# piste setup on a fresh NixOS machine: the NIXOS marker, a Nix whose flakes
+# are off, an overlay (two) made elsewhere for its own NixOS host
+# (othermachine), SHIM_ENV=NIX_CONFIG so the shims record the NIX_CONFIG each
+# nix call started with.
+#
+# 1: no git (a git that doesn't run): the checklist, the flakes row a note
+# (setup turns them on for itself), git fatal with the one command that gets
+# it, and a stop before cloning. 2: a machine called nixos (a fresh NixOS's
+# name) and no terminal: the overlay has no host for it, host add is offered
+# and taken, and refuses (a NixOS host needs a name of its own), writing
+# nothing. 2b: no piste on PATH (a first run through nix run): each nix run
+# line setup prints carries the flakes in NIX_CONFIG, with the offer declined
+# and with the build failing. 3: a machine called testhost: host add is
+# offered and taken, the system is built, and the switch (sudo nixos-rebuild
+# switch) taken, with NIX_CONFIG holding the flakes on every nix call after
+# the checklist's own (which saw the Nix as it is); no login-shell hint (a
+# NixOS host's switch sets zsh). 4: flakes on already: no note, and no
+# NIX_CONFIG; testhost is already a host in the overlay, its root by label
+# (as on a clone of it): a warning before the offer of the switch, which
+# still follows. 5: its root by uuid, this machine's: no warning. 6: its root
+# another machine's (a uuid this machine doesn't have): the warning says so,
+# and the offer follows.
+[!linux] skip 'a NixOS machine is Linux'
+
+env USER=jane
+env SHIM_ENV=NIX_CONFIG
+exec sh mkremote.sh
+exec sh mkck.sh ck
+exec chmod 0755 bin/nix stubgit/git
+env PATH=$WORK/bin${:}$PATH
+env GOODPATH=$PATH
+
+# overlays/two, made on another machine for its NixOS host othermachine.
+cd ck
+exec piste init two --no-build --nixos --system x86_64-linux --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec sh $WORK/mktwo.sh
+cd $WORK
+
+# This machine runs NixOS now, with flakes off (a fresh Nix has not even
+# nix-command) and the configuration an install leaves.
+mkdir $WORK/.machine/etc-nixos
+exec touch $WORK/.machine/NIXOS
+cp configuration.nix $WORK/.machine/etc-nixos/configuration.nix
+cp nix-config-off.txt $WORK/replies/nix-config
+
+# 1: no git.
+rm $WORK/calls
+env PATH=$WORK/stubgit${:}$GOODPATH
+! exec piste setup --no-github --from file://$WORK/remote/piste.git --dir $WORK/home/p1 file://$WORK/remote/two.git
+env PATH=$GOODPATH
+stdout '^✓ Nix$'
+stdout '^· flakes: Flakes are off in this NixOS.s Nix; setup turns them on for itself, and your first switch turns them on for good$'
+stderr '^✗ git: nix --extra-experimental-features ''nix-command flakes'' shell nixpkgs#git --command nix --extra-experimental-features ''nix-command flakes'' run github:elocke/piste/stable -- setup <url>$'
+stderr '^Fix the above, then run piste setup again\.$'
+! exists $WORK/home/p1
+# Only the checklist's probes ran, each in the Nix as it is.
+! grep '^nix (build|eval|flake)' $WORK/calls
+! grep 'NIX_CONFIG=.' $WORK/calls
+
+# 2: a fresh NixOS machine's name, and no terminal to ask for another.
+cp nixos-hostname.txt $WORK/.machine/hostname
+stdin yes.txt
+! exec piste setup --no-github --from file://$WORK/remote/piste.git --dir $WORK/home/p2 file://$WORK/remote/two.git
+stdout '^✓ git$'
+stdout 'overlays/two has no host for this machine \(nixos\)\.$'
+stdout 'Add this machine to it\?'
+stderr '^"nixos" is NixOS.s default hostname: give this machine its own name with --name$'
+! stdout 'Switch this machine'
+! stdout 'Added \S+ \(roles'
+exec git -C $WORK/home/p2/overlays/two status --porcelain
+! stdout .
+! exists $WORK/home/p2/overlays/two/hosts/nixos
+rm $WORK/.machine/hostname
+
+# 2b: a first run through nix run (no piste on PATH), from outside the
+# checkout: each nix run line setup prints turns flakes on, as setup did for
+# its own run (a nix flag would reach nix run, not the nix calls piste
+# makes). The offer declined: the line that adds this machine later.
+stdin no.txt
+! exec sh nopath-piste setup --no-github --from file://$WORK/remote/piste.git --dir $WORK/home/p3 file://$WORK/remote/two.git
+stdout 'Setup stopped\. To add this machine when you want it: cd ~/p3 && NIX_CONFIG=''extra-experimental-features = nix-command flakes'' nix run \.#piste -- host add --overlay two$'
+# The offer taken, and the build fails: the line that builds it again.
+env SHIM_EXIT_NIX_BUILD=1
+stdin yes.txt
+! exec sh nopath-piste setup --no-github --dir $WORK/home/p3 --overlay two
+env SHIM_EXIT_NIX_BUILD=
+stdout 'Added testhost'
+stdout '^overlays/two: this machine was added; fix the build and run: cd ~/p3 && NIX_CONFIG=''extra-experimental-features = nix-command flakes'' nix run \.#piste -- build --overlay two$'
+# Every nix run line (Rerun with, piste fix's) has them: none without.
+! stdout '&& nix run '
+
+# 2c: the line setup printed, run as printed, in p2 (its overlay without
+# this machine): its NIX_CONFIG gives this run the flakes, and the lines
+# this run prints carry them on, the failed build's and then the passing
+# build's.
+cd $WORK/home/p2
+env 'NIX_CONFIG=extra-experimental-features = nix-command flakes'
+env SHIM_EXIT_NIX_BUILD=1
+! exec sh $WORK/nopath-piste host add --overlay two
+env SHIM_EXIT_NIX_BUILD=
+stdout 'Added testhost'
+stdout '^Rerun with: NIX_CONFIG=''extra-experimental-features = nix-command flakes'' nix run \.#piste -- --verbose build$'
+stdout '^overlays/two: this machine was added; fix the build and run: NIX_CONFIG=''extra-experimental-features = nix-command flakes'' nix run \.#piste -- build --overlay two$'
+! stdout '(^|: |&& )nix run '
+exec sh $WORK/nopath-piste build --overlay two
+stdout 'Build complete\. To apply: NIX_CONFIG=''extra-experimental-features = nix-command flakes'' nix run \.#piste -- switch$'
+env NIX_CONFIG=
+cd $WORK
+
+# 3: a machine called testhost.
+rm $WORK/calls
+exec sh facts.sh
+stdin yes-yes.txt
+exec piste setup --no-github --from file://$WORK/remote/piste.git --dir $WORK/home/piste file://$WORK/remote/two.git
+stdout '^✓ Nix$'
+stdout '^· flakes: Flakes are off in this NixOS.s Nix'
+stdout '^✓ git$'
+! stdout 'Xcode'
+stdout 'overlays/two has no host for this machine \(testhost\)\.$'
+stdout 'Add this machine to it\?'
+stdout 'Added testhost \(roles: dev\) to overlays/two: hosts/testhost/ and its entry in flake.nix, staged'
+stdout 'sudo will ask for your password\.'
+stdout 'Switch this machine to it now'
+stdout 'Switched\. Open a new shell'
+# git was setup's own nix shell's: the line that keeps the new host gets
+# its git through nix shell too.
+stdout '^  To keep it: nix --extra-experimental-features ''nix-command flakes'' shell nixpkgs#git --command git -C \S+/overlays/two commit -m ''Add testhost'' -- .* && nix --extra-experimental-features ''nix-command flakes'' shell nixpkgs#git --command git -C \S+/overlays/two push$'
+! stdout 'already a host in this overlay'
+! stdout 'login shell'
+! stdout 'chsh'
+grep '^sudo nixos-rebuild switch --flake \S+/home/piste/overlays/two#testhost( |$)' $WORK/calls
+# The checklist's probes saw the Nix as it is; every nix call after them
+# got the flakes on, the builds and the evals alike.
+grep '(?s)\Anix --version\nenv NIX_CONFIG=\nnix config show experimental-features\nenv NIX_CONFIG=\n' $WORK/calls
+grep '^nix build .*overlays/two#nixosConfigurations\."testhost"\.config\.system\.build\.toplevel( |$)' $WORK/calls
+grep '(?s)\nnix build [^\n]*\nenv NIX_CONFIG=extra-experimental-features = nix-command flakes\n' $WORK/calls
+grep '(?s)\nnix eval [^\n]*\nenv NIX_CONFIG=extra-experimental-features = nix-command flakes\n' $WORK/calls
+grep '(?s)\nnix flake archive [^\n]*\nenv NIX_CONFIG=extra-experimental-features = nix-command flakes\n' $WORK/calls
+! grep '(?s)\nnix (build|eval|flake archive) [^\n]*\nenv NIX_CONFIG=\n' $WORK/calls
+
+# 4: flakes on already: no note, the checklist passes plain, and no nix
+# call gets NIX_CONFIG.
+cp nix-config-on.txt $WORK/replies/nix-config
+cd $WORK/home/piste
+rm $WORK/calls
+stdin $WORK/no.txt
+exec piste setup --no-github --overlay two
+stdout '^✓ flakes$'
+! stdout 'Flakes are off'
+stdout 'overlays/two has this machine'
+stdout '(?s)\ntesthost is already a host in this overlay, and piste can.t tell this machine is it \(its root, \S+/dev/disk/by-label/nixos, is a label every machine made from one image has\)\. If this is a new machine, stop and run piste host add --name <new name>\.\n.*Switch this machine to it now'
+grep '^nix eval ' $WORK/calls
+! grep 'NIX_CONFIG=.' $WORK/calls
+
+# 5: testhost's root by uuid, this machine's. Not vacuous: its root was
+# read against this one (the switch, declined, reads none).
+exec sh $WORK/facts.sh $WORK/dev/disk/by-uuid/bbbb
+rm $WORK/calls
+stdin $WORK/no.txt
+exec piste setup --no-github --overlay two
+stdout 'overlays/two has this machine'
+! stdout 'already a host in this overlay'
+stdout 'Switch this machine to it now'
+grep '(?s)nix eval --json \S+/overlays/two#nixosConfigurations\."testhost"\.config .*\nfindmnt -no SOURCE /\n' $WORK/calls
+! grep 'nixos-rebuild' $WORK/calls
+
+# 6: testhost's root is another machine's: not "can't tell".
+exec sh $WORK/facts.sh $WORK/dev/disk/by-uuid/0000-other
+stdin $WORK/no.txt
+exec piste setup --no-github --overlay two
+stdout 'overlays/two has this machine'
+stdout '(?s)\ntesthost is another machine.s host in this overlay \(its root is \S+/dev/disk/by-uuid/0000-other, this machine.s is \S+/dev/vda1\)\. If this is a new machine, stop and run piste host add --name <new name>\.\n.*Switch this machine to it now'
+! stdout 'can.t tell'
+
+-- mkremote.sh --
+set -e
+mkdir -p replies src
+cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main
+git add -A && git -c user.name=t -c user.email=t@x commit -q -m v0.1.0 && git tag v0.1.0
+cd .. && mkdir -p remote && git clone -q --bare src remote/piste.git
+-- mkck.sh --
+# mkck.sh <dir>: an empty piste checkout, the engine's template in it.
+set -e
+mkdir -p "$1"
+cd "$1"
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+-- mktwo.sh --
+# overlays/two of the first machine's checkout, committed and pushed to
+# remote/two.git.
+set -e
+cd "$WORK/ck/overlays/two"
+git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+git clone -q --bare . "$WORK/remote/two.git"
+-- facts.sh --
+# facts.sh [<root>]: what the switch evaluates of the new system (the
+# preflight's facts), its root <root> (else by label), and the running root
+# they are read against, with a label and a uuid link to it.
+mkdir -p "$WORK/dev/disk/by-label" "$WORK/dev/disk/by-uuid"
+: > "$WORK/dev/vda1"
+ln -sf ../../vda1 "$WORK/dev/disk/by-label/nixos"
+ln -sf ../../vda1 "$WORK/dev/disk/by-uuid/bbbb"
+echo "$WORK/dev/vda1" > "$WORK/replies/findmnt"
+printf '{"SSHEnabled":true,"PasswordAuth":false,"KbdInteractive":false,"KeysInHomedir":true,"Keys":1,"KeyFiles":0,"Wheel":true,"SudoEnabled":true,"WheelNeedsPassword":true,"NopasswdForUser":false,"HasPassword":true,"BootLoader":true,"IsContainer":false,"RootDevice":"%s"}' "${1:-$WORK/dev/disk/by-label/nixos}" > "$WORK/replies/nix-eval-preflight"
+-- bin/nix --
+#!/bin/sh
+# nix, answering the hosts eval, the roles eval and the NixOS names eval
+# from the flake's own hosts."…" entries (nixos = true; marks a NixOS host,
+# roles = [ … ]; its roles; modules = ends it), host add's evaluation of the
+# host's networking.hostName (its name), and the switch's evaluation of the
+# new system from replies/nix-eval-preflight; the rest goes to the shared
+# shim. It records NIX_CONFIG as the shim does (SHIM_ENV).
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ -n "$SHIM_ENV" ]; then
+  eval "v=\${$SHIM_ENV}"
+  printf 'env %s=%s\n' "$SHIM_ENV" "$(printf '%s' "$v" | awk 'NR>1{printf "\\n"} {printf "%s",$0}')" >> "$WORK/calls"
+fi
+case "$*" in
+*'c.networking.hostName'*)
+  n=$(printf '%s\n' "$*" | sed -n 's/.*nixosConfigurations\."\([^"]*\)"\.config.*/\1/p')
+  echo "{\"hostName\": \"$n\", \"proxmoxLXC\": false}"; exit 0 ;;
+*'".config '*) exec cat "$WORK/replies/nix-eval-preflight" ;;
+esac
+for a in "$@"; do case "$a" in *'#.') f="${a%#.}/flake.nix" ;; esac; done
+case "$*" in
+*piste.roles*nixosConfigurations*) mode=roles-nixos ;;
+*piste.roles*darwinConfigurations*) mode=roles-darwin ;;
+*piste.roles*) mode=roles-home ;;
+*'darwin = builtins.attrNames'*) mode=hosts ;;
+*'(o.nixosConfigurations or { })'*) mode=names ;;
+*) mode=hosts ;;
+esac
+exec awk -v mode="$mode" '
+  function add(k, s) { list[k] = list[k] (list[k] == "" ? "" : ", ") s }
+  /^ *hosts\."[^"]*" = \{/ { n = $0; sub(/^ *hosts\."/, "", n); sub(/".*/, "", n); nx = 0; r = "" }
+  n != "" && /^ *nixos = true;/ { nx = 1 }
+  n != "" && /^ *roles = \[/ { r = $0; sub(/^ *roles = \[ */, "", r); sub(/ *\].*/, "", r); gsub(/" "/, "\", \"", r) }
+  n != "" && /^ *modules = / {
+    k = nx ? "nixos" : (index(n, "@") ? "home" : "darwin")
+    add(k, "\"" n "\""); add("roles-" k, "\"" n "\": [" r "]"); n = ""
+  }
+  END {
+    if (mode == "names") print "[" list["nixos"] "]"
+    else if (mode ~ /^roles-/) print "{\"roles\": {" list[mode] "}}"
+    else print "{\"darwin\": [" list["darwin"] "], \"home\": [" list["home"] "], \"nixos\": [" list["nixos"] "]}"
+  }' "$f"
+-- stubgit/git --
+#!/bin/sh
+# A git that doesn't run (none installed, as on a fresh NixOS).
+exit 127
+-- nopath-piste --
+# piste with no piste on PATH, as `nix run .#piste --` runs it: every
+# directory holding one leaves PATH.
+p=$(command -v piste)
+keep=
+IFS=:
+for d in $PATH; do
+  [ -x "$d/piste" ] || keep=${keep:+$keep:}$d
+done
+unset IFS
+PATH=$keep
+export PATH
+exec "$p" "$@"
+-- configuration.nix --
+{ config, pkgs, ... }:
+
+{
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "/dev/vda";
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+
+  networking.useDHCP = true;
+  services.openssh.enable = true;
+
+  system.stateVersion = "24.05";
+}
+-- nix-config-off.txt --
+nix-command
+-- nix-config-on.txt --
+fetch-closure flakes nix-command
+-- nixos-hostname.txt --
+nixos
+-- yes.txt --
+y
+-- yes-yes.txt --
+y
+y
+-- no.txt --
+n

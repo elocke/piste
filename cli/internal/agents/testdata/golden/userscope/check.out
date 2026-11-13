@@ -1,0 +1,13 @@
+ok         skills             .claude/skills/ok  src/skills/ok
+broken     skills             .claude/skills/broken  src/skills/gone
+invalid    skills             .claude/skills/bad  name 'wrong-name' != link 'bad'; frontmatter missing 'description'
+foreign    skills             .claude/skills/copy  src/skills/ok
+missing    skills             .claude/skills/missing  src/skills/ok
+ok         skills             .agents/skills/ok  src/skills/ok
+stale      instructions       .claude/CLAUDE.md  shared/instructions/never.md
+stale      instructions       .codex/AGENTS.md  shared/instructions/never.md, x.md
+deferred   skills             paseo  third-party; not locked yet (piste agents update)
+unmanaged  skills             .agents/skills/unmanaged-one  not declared by any preset
+unmanaged  skills             .claude/skills/hand  not declared by any preset
+
+FAIL: 1 broken, 1 deferred, 1 foreign, 1 invalid, 1 missing, 2 ok, 2 stale, 2 unmanaged

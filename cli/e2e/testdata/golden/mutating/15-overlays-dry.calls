@@ -1,0 +1,1 @@
+gh api repos/o/tool/releases/latest --jq {tag: .tag_name, assets: [.assets[] | {name, url: .browser_download_url}]}

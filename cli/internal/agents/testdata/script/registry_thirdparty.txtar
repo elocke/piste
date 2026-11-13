@@ -1,0 +1,68 @@
+# registry_thirdparty: locked third-party skills are
+# registry items (<zone>:3p-skill/<name>) only with their fetched content;
+# a project may use one only if the zone [policy] allows its source.
+
+exec piste agents registry build --out reg $RS --zone-root=p2=personal:$WORK/zp --zone personal --third-party=tp-good=$WORK/fetched/good --third-party=tp-bad=$WORK/fetched/bad
+stderr 'personal:3p-skill/tp-missing: locked, but no fetched content on this machine \(not offered\)'
+stdout '2 3p-skill'
+
+exec piste agents --registry reg show personal:3p-skill/tp-good
+stdout '^trust: +third-party \(allowed by github:good/\*\)'
+stdout '^source: +github:good/repo/skills/tp-good'
+stdout '^version: +v1.2.0'
+stdout '^commit: +1111111111111111111111111111111111111111'
+exec piste agents --registry reg show personal:3p-skill/tp-bad
+stdout 'NOT allowed by the zone \[policy\]'
+! exec piste agents --registry reg show personal:3p-skill/tp-missing
+stderr 'not in the registry'
+
+cd proj
+exec piste agents --registry ../reg add personal:3p-skill/tp-good
+exists .agents/skills/tp-good/SKILL.md
+exec piste agents --registry ../reg drift --ci
+stdout '^ok +personal:3p-skill/tp-good'
+
+! exec piste agents --registry ../reg add personal:3p-skill/tp-bad
+stderr 'github:bad/repo is not allowed by the personal zone \[policy\] \(refused\)'
+! exists .agents/skills/tp-bad
+
+-- proj/.git/HEAD --
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- zp/agents.toml --
+[policy]
+allow = ["github:good/*"]
+-- zp/agents.lock --
+version = 1
+
+[[skill]]
+name = "tp-good"
+source = "github:good/repo"
+path = "skills/tp-good"
+ref = "v1.2.0"
+commit = "1111111111111111111111111111111111111111"
+
+[[skill]]
+name = "tp-bad"
+source = "github:bad/repo"
+path = "."
+commit = "2222222222222222222222222222222222222222"
+
+[[skill]]
+name = "tp-missing"
+source = "github:good/other"
+commit = "3333333333333333333333333333333333333333"
+-- fetched/good/SKILL.md --
+---
+name: tp-good
+description: Use when a good third-party thing is needed.
+license: MIT
+---
+Good.
+-- fetched/bad/SKILL.md --
+---
+name: tp-bad
+description: Use when a bad third-party thing is needed.
+---
+Bad.

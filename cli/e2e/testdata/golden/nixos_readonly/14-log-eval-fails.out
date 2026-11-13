@@ -1,0 +1,4 @@
+can't read nixosConfigurations from $WORK/flake: error: example eval failure; this machine's generations are the system's
+Recent generations:
+$WORK/.machine/profiles/system-41-link
+$WORK/.machine/profiles/system-42-link

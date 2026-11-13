@@ -1,0 +1,137 @@
+name: lock-review
+
+# Triage the weekly flake.lock bump and merge it if the checks prove it.
+#
+# This repo is the easy case: it declares no hosts, so everything it produces is
+# Linux-buildable and piste.yml already proves it (`nix build .#piste`, `flake
+# check`, the smoke run). There is no darwin blind spot here.
+#
+# A rev bump is not readable the way a skill diff is — a nixpkgs bump is tens of
+# thousands of commits — so no agent reads anything and no API credential is
+# needed. ci/lock-triage.py does the mechanical half:
+#
+#   escalate  an input appeared or disappeared, now points somewhere else
+#             (url/ref/owner/repo/type), had its `original` declaration or its
+#             `follows` wiring changed, or would move *backwards* (a stale
+#             branch, which is what merging an old bump PR actually does)
+#   review    every input moved rev + narHash forward only
+#
+# ci/lock-decide.py then merges only if the tier is `review` and the repo's own
+# checks are green — a check that has not concluded counts as not green.
+#
+# First, though, the PR's branch must contain main's tip. The bump cuts its
+# patch release from main as it was when it ran; a merge after main moved
+# would release what merged since (a feature, an Upgrading note) as that
+# patch, and CHANGELOG.md doesn't always conflict to stop it. Such a bump
+# waits: the next update-flake-lock run rebuilds it from main and cuts again.
+#
+# This repo has no agents.lock (it declares the shared defaults in
+# agents/agents.base.toml; an overlay pins them), so there is nothing else here
+# to review. An overlay can run the same two scripts over both lockfiles.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 12 * * 1" # Mondays 12:00 UTC, after update-flake-lock
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lock-review
+  cancel-in-progress: false
+
+env:
+  PR_BRANCH: update_flake_lock_action
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # merge the PR
+      pull-requests: write # label and comment
+      checks: read
+      actions: write # start piste-release.yml after the merge
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Find the open bump PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          number=$(gh pr list --head "$PR_BRANCH" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            echo "No open PR on $PR_BRANCH; nothing to review."
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "found=true"
+            echo "number=$number"
+            gh pr view "$number" --json baseRefName,headRefOid \
+              --jq '"base=\(.baseRefName)\nhead=\(.headRefOid)"'
+          } >> "$GITHUB_OUTPUT"
+
+      # Both sides come from git, not from the PR body, so a doctored
+      # description cannot change what gets classified.
+      - name: Triage the lock diff
+        id: triage
+        if: steps.pr.outputs.found == 'true'
+        env:
+          BASE: ${{ steps.pr.outputs.base }}
+          HEAD: ${{ steps.pr.outputs.head }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/locks"
+          git show "origin/$BASE:flake.lock" > "$RUNNER_TEMP/locks/base.lock"
+          git show "$HEAD:flake.lock"        > "$RUNNER_TEMP/locks/head.lock"
+          python3 -I ci/lock-triage.py --kind flake \
+            "$RUNNER_TEMP/locks/base.lock" "$RUNNER_TEMP/locks/head.lock" \
+            --json > "$RUNNER_TEMP/triage.json"
+          python3 -I ci/lock-triage.py --kind flake \
+            "$RUNNER_TEMP/locks/base.lock" "$RUNNER_TEMP/locks/head.lock" \
+            | tee "$RUNNER_TEMP/triage.txt"
+          echo "tier=$(jq -r .tier "$RUNNER_TEMP/triage.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Merge, or say why not
+        if: steps.pr.outputs.found == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KIND: flake
+          NUMBER: ${{ steps.pr.outputs.number }}
+          BASE: ${{ steps.pr.outputs.base }}
+          HEAD: ${{ steps.pr.outputs.head }}
+          TIER: ${{ steps.triage.outputs.tier }}
+          REVIEW_REQUIRED: "false"
+          HAS_KEY: "false"
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "origin/$BASE" "$HEAD"; then
+            {
+              echo "### Behind $BASE, not merged"
+              echo
+              echo "$BASE has moved since this bump was cut from it. If it cut a patch release, merging it now would ship what merged since (a feature, an Upgrading note) as that patch, so don't merge it by hand either."
+              echo
+              echo "The next update-flake-lock run rebuilds it from $BASE and cuts again (\`gh workflow run update-flake-lock.yml\` to do that now)."
+            } > "$RUNNER_TEMP/comment.md"
+            gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"
+            gh pr edit "$NUMBER" --add-label needs-human-review
+            exit 0
+          fi
+          python3 -I ci/lock-decide.py > "$RUNNER_TEMP/decision.json"
+          gh pr comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"
+          if [ "$(jq -r .merge "$RUNNER_TEMP/decision.json")" = "true" ]; then
+            # --match-head-commit refuses the merge if the PR moved under us.
+            gh pr merge "$NUMBER" --squash --match-head-commit "$HEAD"
+            # A merge made with GITHUB_TOKEN starts no workflow: start the
+            # release, which tags the patch the bump PR cut (if it cut one).
+            gh workflow run piste-release.yml --ref main
+          else
+            gh pr edit "$NUMBER" --add-label needs-human-review
+          fi

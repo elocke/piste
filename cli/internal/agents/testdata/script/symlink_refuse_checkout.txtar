@@ -1,0 +1,30 @@
+# symlink_refuse_checkout: a foreign link
+# .claude/skills/alpha -> $WORK/checkout/alpha → exit 1; the checkout and
+# the link are unchanged, and nothing else is written.
+
+mkdir proj/.git
+mkdir proj/.claude/skills
+symlink proj/.claude/skills/alpha -> $WORK/checkout/alpha
+cd proj
+cp $WORK/checkout/alpha/SKILL.md $WORK/orig.md
+
+! exec piste agents add shared:skill/alpha $RS
+stderr 'symlink not written by piste'
+cmp $WORK/checkout/alpha/SKILL.md $WORK/orig.md
+! exists .agents/skills/alpha
+! exists .agents/agents.lock
+! grep 'shared:skill/alpha' .agents/agents.toml
+
+# --force never writes through a foreign link either.
+! exec piste agents add --force shared:skill/alpha $RS
+cmp $WORK/checkout/alpha/SKILL.md $WORK/orig.md
+
+-- checkout/alpha/SKILL.md --
+---
+name: alpha
+description: The user's own checkout.
+---
+Mine.
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

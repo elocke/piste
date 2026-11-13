@@ -1,0 +1,7 @@
+nix eval --json --override-input piste git+file://$WORK/ck $WORK/ck/overlays/other#. --apply o: { darwin = builtins.attrNames (o.darwinConfigurations or { }); home = builtins.attrNames (o.homeConfigurations or { }); nixos = builtins.attrNames (o.nixosConfigurations or { }); }
+nix eval --json --override-input piste git+file://$WORK/ck $WORK/ck/overlays/other#. --apply o: { roles = builtins.mapAttrs (_: c: builtins.attrNames (c.config.home-manager.users."jane".piste.roles or { })) (o.nixosConfigurations or { }); }
+nix eval --json --override-input piste git+file://$WORK/ck $WORK/ck/overlays/other#. --apply o: { darwin = builtins.attrNames (o.darwinConfigurations or { }); home = builtins.attrNames (o.homeConfigurations or { }); nixos = builtins.attrNames (o.nixosConfigurations or { }); }
+nix eval --json $WORK/ck/overlays/other#. --override-input piste git+file://$WORK/ck --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix build $WORK/ck/overlays/other#nixosConfigurations."box".config.system.build.toplevel --override-input piste git+file://$WORK/ck
+nix eval --json $WORK/ck/overlays/other#nixosConfigurations."box".config --override-input piste git+file://$WORK/ck --apply c: { hostName = c.networking.hostName; proxmoxLXC = (c.proxmoxLXC.enable or false) && !(c.proxmoxLXC.manageNetwork or false) && !(c.proxmoxLXC.manageHostName or false); proxmoxCloudInit = c.proxmox.cloudInit.enable or false; } --no-write-lock-file
+sudo hostname box

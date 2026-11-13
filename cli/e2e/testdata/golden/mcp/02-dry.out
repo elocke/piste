@@ -1,0 +1,13 @@
+dry run: nothing is changed
+claude-code: gw drifted (url, headers differ); re-adding
+claude-code: elsewhere is declared, but not for claude-code on this host; `piste mcp sync --prune` removes it
+  $ claude mcp add --scope user pw -- npx -y @playwright/mcp
+  $ claude mcp add --scope user tool -e LOG=info -e HINDSIGHT_MCP_HARNESS=claude -- $WORK/h/bin/tool --flag
+  $ claude mcp remove --scope user gw
+  $ claude mcp add --scope user --transport http gw https://gw.example/mcp --header 'Authorization: Bearer ${GW_TOKEN}'
+claude-code: undeclared, left alone: mine, oldc. Declare it, add it to `retired`, or remove it by hand.
+claude-code: not ours, never touched: claude.ai Gmail, plugin:githits:githits
+codex: old is retired in the manifest; `piste mcp sync --prune` removes it
+  $ codex mcp add tool --env LOG=info --env HINDSIGHT_MCP_HARNESS=codex -- $WORK/h/bin/tool --flag
+codex: undeclared, left alone: handmade. Declare it, add it to `retired`, or remove it by hand.
+codex: not ours, never touched: node_repl

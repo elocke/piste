@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""Fake `codex app-server` for tests/agents: reads <cwd>/.codex/hooks.json, keeps
+trust in <cwd>/.codex/fake-trust.json. Hash/key shapes mimic Codex's."""
+import hashlib, json, os, re, sys
+from pathlib import Path
+
+assert sys.argv[1:] == ["app-server"], sys.argv
+home = Path(os.getcwd())
+hooks_path = home / ".codex" / "hooks.json"
+trust_path = home / ".codex" / "fake-trust.json"
+SNAKE = {"PreToolUse": "pre_tool_use", "PostToolUse": "post_tool_use", "Stop": "stop",
+         "UserPromptSubmit": "user_prompt_submit", "SessionStart": "session_start"}
+
+
+def listing():
+    trust = json.loads(trust_path.read_text()) if trust_path.exists() else {}
+    data = json.loads(hooks_path.read_text()) if hooks_path.exists() else {}
+    out = []
+    for event, groups in (data.get("hooks") or {}).items():
+        for gi, g in enumerate(groups):
+            for hi, h in enumerate(g.get("hooks", [])):
+                key = f"{hooks_path}:{SNAKE[event]}:{gi}:{hi}"
+                ident = json.dumps({"event": event, "matcher": g.get("matcher"), "hook": h}, sort_keys=True)
+                cur = "sha256:" + hashlib.sha256(ident.encode()).hexdigest()
+                t = trust.get(key)
+                status = "trusted" if t == cur else ("modified" if t else "untrusted")
+                out.append({"key": key, "eventName": event[0].lower() + event[1:], "command": h.get("command"),
+                            "sourcePath": str(hooks_path), "pluginId": None, "currentHash": cur, "trustStatus": status})
+    return out
+
+
+for line in sys.stdin:
+    msg = json.loads(line)
+    method, mid = msg.get("method"), msg.get("id")
+    if mid is None:
+        continue
+    if method == "initialize":
+        result = {"userAgent": "fake"}
+    elif method == "hooks/list":
+        result = {"data": [{"cwd": str(home), "hooks": listing()}]}
+    elif method == "config/value/write":
+        key = re.fullmatch(r'hooks\.state\."(.*)"\.trusted_hash', msg["params"]["keyPath"]).group(1)
+        trust = json.loads(trust_path.read_text()) if trust_path.exists() else {}
+        trust[key.replace('\\"', '"').replace("\\\\", "\\")] = msg["params"]["value"]
+        trust_path.write_text(json.dumps(trust))
+        result = {"status": "ok"}
+    else:
+        print(json.dumps({"id": mid, "error": {"message": f"unsupported {method}"}}), flush=True)
+        continue
+    print(json.dumps({"id": mid, "result": result}), flush=True)

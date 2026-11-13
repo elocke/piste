@@ -1,0 +1,55 @@
+# hermes_bundle_profiles: every hermes-<profile> preset renders into
+# one tree (each skill once) plus profiles/<p>/<name> links, and the check
+# catches a changed file, an extra link and a stale skill.
+
+exec piste agents bundle --target hermes --zone personal --out b --source-commit personal=abc123 $RS $RP
+stdout 'wrote b: 3 skills; profiles family=2 jane=2'
+stderr 'dropped Claude-only frontmatter allowed-tools'
+exists b/tree/alpha/SKILL.md
+exists b/tree/alpha/scripts/run
+exists b/tree/beta/SKILL.md
+exists b/tree/gamma/SKILL.md
+! exists b/skills
+exists b/profiles/jane/beta/SKILL.md
+exists b/profiles/family/gamma/SKILL.md
+! exists b/profiles/family/beta
+grep '"format": "hermes-skills/1"' b/manifest.json
+grep '"commit": "abc123"' b/manifest.json
+exec piste agents bundle --check b
+stdout 'OK'
+
+# A changed file fails the check.
+cp tamper.md b/tree/gamma/SKILL.md
+! exec piste agents bundle --check b
+stdout 'changed file tree/gamma/SKILL.md'
+
+# Rebundling replaces the tree whole; a skill dropped from every preset is gone.
+replace '"alpha", "gamma"' '"alpha"' zones/shared/presets/hermes-family.toml
+exec piste agents bundle --target hermes --zone personal --out b $RS $RP
+stdout 'wrote b: 2 skills; profiles family=1 jane=2'
+! exists b/tree/gamma
+! exists b/profiles/family/gamma
+exec piste agents bundle --check b
+
+# An extra link in a profile fails the check.
+symlink b/profiles/family/beta -> ../../tree/beta
+! exec piste agents bundle --check b
+stdout 'extra skill profiles/family/beta'
+
+# A commit for an unknown zone root is refused.
+! exec piste agents bundle --target hermes --zone personal --out c --source-commit nope=1 $RS $RP
+stderr 'no such zone root'
+
+# A work machine does not see the personal preset or skill.
+exec piste agents bundle --target hermes --zone work --out w $RS $RW
+stdout 'profiles family=1'
+
+-- zones/personal/presets/hermes-jane.toml --
+targets = ["hermes"]
+skills = ["beta", "alpha"]
+-- tamper.md --
+---
+name: gamma
+description: Use when gamma.
+---
+Tampered.

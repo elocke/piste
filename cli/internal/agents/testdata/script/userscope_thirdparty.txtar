@@ -1,0 +1,467 @@
+# User-scope third-party items: check, sync (dry run, prune, apply,
+# repin) and update, with fake claude, codex, pnpm, git and nix on PATH.
+# Every stdout, stderr, exit code, the fakes' call logs and the written
+# agents.lock are frozen in $GOLDEN/userscope_thirdparty.
+
+chmod 0755 bin/claude
+chmod 0755 bin/codex
+chmod 0755 bin/pnpm
+chmod 0755 bin/git
+chmod 0755 bin/nix
+chmod 0755 bin/fake.py
+env PATH=$WORK/bin${:}$PATH
+env HOME=$WORK/h
+
+exec sh scenario.sh
+# Not vacuous: the fakes answered.
+grep '^ok +claude.marketplace +good ' out/01-check.out
+grep '^drift +claude.plugin +old@good +version 1.0.0 != lock 2.0.0' out/01-check.out
+grep '^undeclared +claude.plugin +stray@good' out/01-check.out
+grep 'would install missing@good' out/04-sync-dry.out
+grep 'uninstall undeclared claude plugin stray@good' out/05-prune.out
+grep '^claude plugin uninstall stray@good --scope user$' out/06-apply.calls
+grep 'claude plugin marketplace update piste-local' out/04-sync-dry.out
+grep 'wrote agents/agents.lock' out/08-update.out
+# url: marketplace (hash of the installed file) and enabled = false plugins.
+grep '^ok +claude.marketplace +urlm +marketplace.json ' out/01-check.out
+grep '^ok +claude.plugin +quiet@good' out/01-check.out
+grep '^drift +claude.plugin +pua@urlm +enabled \(declared enabled = false\)' out/01-check.out
+grep 'disable pua@urlm \(declared enabled = false\)' out/04-sync-dry.out
+grep 'install gone@urlm' out/04-sync-dry.out
+grep 'disable gone@urlm \(declared enabled = false\)' out/04-sync-dry.out
+! grep 'quiet@good' out/04-sync-dry.out
+grep '^claude plugin disable pua@urlm --scope user$' out/06-apply.calls
+grep '^claude plugin install gone@urlm --scope user$' out/06-apply.calls
+grep '^claude plugin disable gone@urlm --scope user$' out/06-apply.calls
+grep '^claude plugin marketplace add .*/mirrors/urlm/plugins$' out/09-update-all.calls
+grep '^git clone --quiet https://github.com/o/cfg.git ' out/09-update-all.calls
+# An unused catalog marketplace or skill: no row, no step, no lock entry.
+! grep catalog out/01-check.out
+! grep catalog out/04-sync-dry.out
+! grep catalog out/09-update-all.calls
+! grep catalog out/09-update-all.lock
+! grep catskill out/01-check.out
+! grep catskill out/09-update-all.calls
+! grep catskill out/09-update-all.lock
+exec sh normalize.sh
+cmpworkdir out $GOLDEN/userscope_thirdparty
+
+-- bin/fake.py --
+import json, os, sys
+from pathlib import Path
+tool = sys.argv[1]
+args = sys.argv[2:]
+work = Path(os.environ["FAKE_WORK"])
+state_p = work / "fstate.json"
+state = json.loads(state_p.read_text())
+with open(work / "calls.log", "a") as log:
+    log.write(" ".join([tool] + args) + "\n")
+def save():
+    state_p.write_text(json.dumps(state, indent=1))
+def out(x):
+    print(json.dumps(x))
+if tool == "claude":
+    a = [x for x in args if x != "--json"]
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    if cfg:  # the update sandbox
+        sb = state.setdefault("sandbox", {"markets": [], "plugins": {}})
+        if a[:3] == ["plugin", "marketplace", "add"]:
+            sb["markets"].append(a[3])
+        elif a[:2] == ["plugin", "install"]:
+            pid = a[2]
+            p = Path(cfg) / "plugins" / "installed_plugins.json"
+            p.parent.mkdir(parents=True, exist_ok=True)
+            data = json.loads(p.read_text()) if p.exists() else {"plugins": {}}
+            v = state["catalog"].get(pid, {"version": "9.9.9", "sha": "f" * 40})
+            data["plugins"][pid] = [{"scope": "user", "version": v["version"], "gitCommitSha": v["sha"]}]
+            p.write_text(json.dumps(data))
+        save(); sys.exit(0)
+    if a == ["plugin", "marketplace", "list"]:
+        out(state["markets"])
+    elif a == ["plugin", "list"]:
+        out(state["plugins"])
+    elif a[:3] == ["plugin", "marketplace", "add"] or a[:3] == ["plugin", "marketplace", "update"]:
+        pass
+    elif a[:3] == ["plugin", "marketplace", "remove"]:
+        state["markets"] = [m for m in state["markets"] if m["name"] != a[3]]
+    elif a[:2] in (["plugin", "install"], ["plugin", "update"], ["plugin", "enable"], ["plugin", "disable"]):
+        if a[2] == "boom@good":
+            print("install failed: boom", file=sys.stderr); sys.exit(3)
+    elif a[:2] == ["plugin", "uninstall"]:
+        state["plugins"] = [p for p in state["plugins"] if p["id"] != a[2]]
+    else:
+        print(f"fake claude: {a}", file=sys.stderr); sys.exit(2)
+elif tool == "codex":
+    if args[:3] == ["plugin", "list", "--json"]:
+        out(state["codex"])
+    elif args[:2] in (["plugin", "add"], ["plugin", "remove"]):
+        pass
+    else:
+        print(f"fake codex: {args}", file=sys.stderr); sys.exit(2)
+elif tool == "pnpm":
+    if args[:2] == ["list", "-g"]:
+        out([{"dependencies": state["pnpm"]}])
+elif tool == "git":
+    if args[0] == "ls-remote":
+        url = args[1]
+        for name, sha in state["remotes"].get(url, {}).items():
+            print(f"{sha}\t{name}")
+    elif args[0] == "clone":
+        d = Path(args[-1]); (d / ".git").mkdir(parents=True, exist_ok=True); (d / ".git" / "HEAD").write_text("0" * 40)
+    elif args[0] == "-C":
+        d = Path(args[1]); rest = [x for x in args[2:] if not x.startswith("advice") and x not in ("-c", "--quiet")]
+        if rest[:2] == ["rev-parse", "HEAD"]:
+            print((d / ".git" / "HEAD").read_text())
+        elif rest[:1] == ["checkout"]:
+            (d / ".git" / "HEAD").write_text(rest[-1])
+elif tool == "nix":
+    print("error: hash mismatch in fixed-output derivation\n         specified: sha256-AAAA\n            got:    sha256-FAKEHASH0000000000000000000000000000000000=", file=sys.stderr)
+    sys.exit(1)
+save()
+-- bin/claude --
+#!/bin/sh
+exec python3 "$FAKE_WORK/bin/fake.py" claude "$@"
+-- bin/codex --
+#!/bin/sh
+exec python3 "$FAKE_WORK/bin/fake.py" codex "$@"
+-- bin/pnpm --
+#!/bin/sh
+exec python3 "$FAKE_WORK/bin/fake.py" pnpm "$@"
+-- bin/git --
+#!/bin/sh
+exec python3 "$FAKE_WORK/bin/fake.py" git "$@"
+-- bin/nix --
+#!/bin/sh
+exec python3 "$FAKE_WORK/bin/fake.py" nix "$@"
+-- scenario.sh --
+out=out
+rm -rf h "$out" calls.log fstate.json agents
+mkdir -p "$out" h/.claude/plugins h/market-good h/market-drift h/market-src agents h/.hindsight
+export FAKE_WORK="$PWD"
+printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' > h/market-good/.gcs-sha
+printf 'cccccccccccccccccccccccccccccccccccccccc' > h/market-drift/.gcs-sha
+printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' > h/market-src/.gcs-sha
+printf '{"version": "0.7.0"}' > h/.hindsight/package.json
+printf '{\n  "plugins": [{"source": "./lsp", "name": "lsp"}],\n  "name": "urlm"\n}\n' > h/market-url
+sed "s|HOME|$PWD/h|g" fstate.tmpl > fstate.json
+cp installed_plugins.json h/.claude/plugins/installed_plugins.json
+cp zone-agents.toml agents/agents.toml
+cp zone-agents.lock agents/agents.lock
+sed "s|WORK|$PWD|g" manifest.tmpl > m.json
+run() {
+  step=$1; shift
+  : > calls.log
+  if [ "$1" = sync ]; then shift; set -- sync --user "$@"; fi
+  PISTE_AGENTS_TOOL=1 piste agents "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp calls.log "$out/$step.calls"
+  cp agents/agents.lock "$out/$step.lock"
+}
+run 01-check check --manifest m.json
+run 02-check-json check --manifest m.json --json
+run 03-skills-only check --manifest m.json --skills-only
+run 04-sync-dry sync --manifest m.json --dry-run
+run 05-prune sync --manifest m.json --prune
+run 06-apply sync --manifest m.json --prune --apply
+run 07-repin-dry sync --manifest m.json --repin --dry-run
+run 08-update update --zone agents --base base/agents.base.toml
+run 09-update-all update --zone agents --all --base base/agents.base.toml
+cp zone-agents.lock agents/agents.lock
+run 10-update-installed update --zone agents --all --from-installed --base base/agents.base.toml
+run 11-apply-noprune sync --manifest m.json --apply
+exit 0
+-- normalize.sh --
+# The update sandbox's temp dir name is random; the golden has it as TMP.
+for f in out/*; do sed 's/piste-agents-update-[A-Za-z0-9_]*/piste-agents-update-TMP/g' "$f" > "$f.t" && mv "$f.t" "$f"; done
+-- base/agents.base.toml --
+# The shared catalog: a marketplace no plugin here names is not this zone's
+# (lib/agents.nix usedMarketplaces): not checked, locked or installed.
+[[claude.marketplace]]
+name   = "catalog"
+source = "github:elsewhere/catalog"
+
+# Nor is a skill no preset selects (lib/agents.nix usedSkills).
+[[skill]]
+name   = "catskill"
+source = "github:elsewhere/catskill"
+path   = "skills/catskill"
+-- manifest.tmpl --
+{"version": 2, "links": [], "instructions": [], "deferred": [],
+ "hooks": {"claude": {"plugin": "piste-harness@piste-local", "marketplace_name": "piste-local", "marketplace": "WORK/h/nix-market", "version": "0.0.0-x", "hooks": {}}, "codex": {}},
+ "thirdParty": [{"file": "agents.base.toml", "path": "WORK/base/agents.base.toml"}, {"file": "agents.toml", "path": "WORK/agents/agents.toml"}, {"file": "agents.lock", "path": "WORK/agents/agents.lock"}]}
+-- installed_plugins.json --
+{"version": 2, "plugins": {"ok@good": [{"scope": "user", "version": "1.0.0", "gitCommitSha": "1111111111111111111111111111111111111111"}],
+ "old@good": [{"scope": "user", "version": "1.0.0", "gitCommitSha": "2222222222222222222222222222222222222222"}],
+ "float@src": [{"scope": "user", "version": "0.9", "gitCommitSha": null}]}}
+-- fstate.tmpl --
+{"markets": [
+   {"name": "good", "source": "github", "repo": "o/good", "installLocation": "HOME/market-good"},
+   {"name": "drift", "source": "github", "repo": "o/drift", "installLocation": "HOME/market-drift"},
+   {"name": "src", "source": "github", "repo": "o/src", "installLocation": "HOME/market-src"},
+   {"name": "piste-local", "source": "directory", "path": "HOME/nix-market"},
+   {"name": "strayMarket", "source": "git", "url": "https://git.example/x.git"},
+   {"name": "urlm", "source": "url", "url": "https://raw.githubusercontent.com/o/cfg/main/plugins/.claude-plugin/marketplace.json", "installLocation": "HOME/market-url"}],
+ "plugins": [
+   {"id": "ok@good", "version": "1.0.0", "enabled": true, "scope": "user"},
+   {"id": "old@good", "version": "1.0.0", "enabled": true, "scope": "user"},
+   {"id": "off@good", "version": "1.0.0", "enabled": false, "scope": "user"},
+   {"id": "float@src", "version": "0.9", "enabled": true, "scope": "user"},
+   {"id": "stray@good", "version": "3.1", "enabled": true, "scope": "user"},
+   {"id": "keep@good", "version": "1", "enabled": true, "scope": "user"},
+   {"id": "piste-harness@piste-local", "version": "0.0.0-x", "enabled": true, "scope": "user"},
+   {"id": "proj@good", "version": "1", "enabled": true, "scope": "project"},
+   {"id": "quiet@good", "version": "1.0.0", "enabled": false, "scope": "user"},
+   {"id": "lsp@urlm", "version": "unknown", "enabled": true, "scope": "user"},
+   {"id": "pua@urlm", "version": "unknown", "enabled": true, "scope": "user"}],
+ "codex": {"installed": [
+   {"pluginId": "github@openai-curated", "version": "0.1.0", "enabled": true, "source": {"source": "remote"}},
+   {"pluginId": "canva@openai-curated", "version": "0.2.0", "enabled": false},
+   {"pluginId": "extra@local", "version": "1.0"}],
+   "available": [{"pluginId": "figma@openai-curated", "version": "0.3.0", "source": {"source": "remote"}}]},
+ "pnpm": {"githits": {"version": "0.6.6"}, "drifty": {"version": "1.0.0"}},
+ "remotes": {"https://github.com/o/good.git": {"HEAD": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+             "https://github.com/o/drift.git": {"HEAD": "dddddddddddddddddddddddddddddddddddddddd"},
+             "https://github.com/o/src.git": {"HEAD": "ffffffffffffffffffffffffffffffffffffffff"},
+             "https://github.com/o/new.git": {"HEAD": "9999999999999999999999999999999999999999"},
+             "https://github.com/o/cfg.git": {"refs/heads/main": "abababababababababababababababababababab", "HEAD": "abababababababababababababababababababab"},
+             "https://github.com/evil/x.git": {"HEAD": "7777777777777777777777777777777777777777"},
+             "https://github.com/o/skills.git": {"refs/tags/v1.2^{}": "5555555555555555555555555555555555555555", "refs/tags/v1.2": "4444444444444444444444444444444444444444", "HEAD": "6666666666666666666666666666666666666666"}},
+ "catalog": {"ok@good": {"version": "1.0.0", "sha": "1111111111111111111111111111111111111111"},
+             "old@good": {"version": "2.0.0", "sha": "3333333333333333333333333333333333333333"}}}
+-- zone-agents.toml --
+[policy]
+allow = ["github:o/*", "url:https://raw.githubusercontent.com/o/*", "npm:*", "codex:*", "pypi:*"]
+tolerate = ["claude.plugin:keep@*", "claude.marketplace:strayM*"]
+unlisted = "warn"
+
+[[skill]]
+name = "locked"
+source = "github:o/skills"
+path = "skills/locked"
+ref = "v1.2"
+
+[[skill]]
+name = "unlocked"
+source = "github:o/skills"
+path = "skills/unlocked"
+
+[[skill]]
+name = "stale"
+source = "github:o/skills"
+path = "skills/moved"
+
+[[skill]]
+name = "blocked"
+source = "github:evil/x"
+
+[[claude.marketplace]]
+name = "good"
+source = "github:o/good"
+
+[[claude.marketplace]]
+name = "drift"
+source = "github:o/drift"
+
+[[claude.marketplace]]
+name = "src"
+source = "github:o/src"
+pin = "source"
+
+[[claude.marketplace]]
+name = "new"
+source = "github:o/new"
+
+[[claude.marketplace]]
+name = "urlm"
+source = "url:https://raw.githubusercontent.com/o/cfg/main/plugins/.claude-plugin/marketplace.json"
+
+[[claude.plugin]]
+id = "ok@good"
+
+[[claude.plugin]]
+id = "old@good"
+
+[[claude.plugin]]
+id = "off@good"
+
+[[claude.plugin]]
+id = "float@src"
+
+[[claude.plugin]]
+id = "missing@good"
+
+[[claude.plugin]]
+id = "quiet@good"
+enabled = false
+
+[[claude.plugin]]
+id = "lsp@urlm"
+
+[[claude.plugin]]
+id = "pua@urlm"
+enabled = false
+
+[[claude.plugin]]
+id = "gone@urlm"
+enabled = false
+
+[[claude.plugin]]
+id = "elsewhere@new"
+hosts = ["some-other-host"]
+
+[[codex.plugin]]
+id = "github@openai-curated"
+
+[[codex.plugin]]
+id = "canva@openai-curated"
+
+[[codex.plugin]]
+id = "figma@openai-curated"
+
+[[mcp]]
+name = "playwright"
+command = "npx"
+args = ["-y", "@playwright/mcp@0.0.83"]
+
+[[mcp]]
+name = "uvtool"
+command = "/usr/bin/uvx"
+args = ["--from", "x", "mcp-thing==1.2"]
+
+[[mcp]]
+name = "local"
+command = "demo-mcp"
+
+[[hook]]
+name = "hindsight"
+mode = "managed"
+installer = "npm:@vectorize-io/hindsight-coding-agents"
+version = "0.7.0"
+versionFile = "~/.hindsight/package.json"
+
+[[hook]]
+name = "paseo"
+mode = "tolerated"
+
+[[tool]]
+name = "githits"
+source = "npm:githits"
+version = "0.6.6"
+
+[[tool]]
+name = "drifty"
+source = "npm:drifty"
+version = "2.0.0"
+
+[[tool]]
+name = "rtk"
+source = "nix:piste#rtk"
+bins = ["rtk-not-on-path"]
+
+[[tool]]
+name = "weird"
+source = "brew:weird"
+-- zone-agents.lock --
+# fixture lock
+version = 1
+
+[[skill]]
+name    = "locked"
+source  = "github:o/skills"
+path    = "skills/locked"
+ref     = "v1.2"
+commit  = "5555555555555555555555555555555555555555"
+narHash = "sha256-LOCKED"
+fetched = "2026-09-01"
+
+[[skill]]
+name    = "stale"
+source  = "github:o/skills"
+path    = "skills/stale"
+commit  = "6666666666666666666666666666666666666666"
+narHash = "sha256-STALE"
+
+[[claude.marketplace]]
+name   = "good"
+source = "github:o/good"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+[[claude.marketplace]]
+name   = "drift"
+source = "github:o/drift"
+commit = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+
+[[claude.marketplace]]
+name   = "src"
+source = "github:o/src"
+commit = "dddddddddddddddddddddddddddddddddddddddd"
+
+[[claude.plugin]]
+id           = "ok@good"
+version      = "1.0.0"
+gitCommitSha = "1111111111111111111111111111111111111111"
+
+[[claude.plugin]]
+id      = "old@good"
+version = "2.0.0"
+
+[[claude.plugin]]
+id      = "float@src"
+version = "1.0"
+
+[[claude.marketplace]]
+name   = "urlm"
+source = "url:https://raw.githubusercontent.com/o/cfg/main/plugins/.claude-plugin/marketplace.json"
+commit = "abababababababababababababababababababab"
+sha256 = "6d4cd970f37f999b6671c5b8cef59529d492bad1247501115b1fece228f22cec"
+
+[[claude.plugin]]
+id      = "quiet@good"
+version = "1.0.0"
+
+[[claude.plugin]]
+id      = "lsp@urlm"
+version = "unknown"
+
+[[claude.plugin]]
+id      = "pua@urlm"
+version = "unknown"
+
+[[claude.plugin]]
+id      = "gone@urlm"
+version = "unknown"
+
+[[codex.plugin]]
+id      = "github@openai-curated"
+version = "0.0.1"
+source  = "remote"
+
+[[mcp]]
+name      = "playwright"
+package   = "npm:@playwright/mcp"
+version   = "0.0.83"
+integrity = "sha512-PW"
+
+[[mcp]]
+name      = "uvtool"
+package   = "pypi:mcp-thing"
+version   = "1.2"
+integrity = "sha256:UV"
+
+[[hook]]
+name      = "hindsight"
+installer = "npm:@vectorize-io/hindsight-coding-agents"
+version   = "0.7.0"
+integrity = "sha512-HS"
+
+[[tool]]
+name      = "githits"
+source    = "npm:githits"
+version   = "0.6.6"
+integrity = "sha512-GH"
+
+[[tool]]
+name      = "drifty"
+source    = "npm:drifty"
+version   = "2.0.0"
+integrity = "sha512-DR"

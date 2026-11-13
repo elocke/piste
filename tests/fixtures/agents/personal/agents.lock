@@ -1,0 +1,10 @@
+# agents.lock: fixture. thirdp2 is locked (deployed as a store fetch);
+# thirdp (shared) is declared but not locked, so it stays deferred.
+version = 1
+
+[[skill]]
+name    = "thirdp2"
+source  = "github:example/thirdp2"
+path    = "."
+commit  = "1111111111111111111111111111111111111111"
+narHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="

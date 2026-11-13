@@ -1,0 +1,374 @@
+# piste adopt: what is installed outside Nix, offered where the overlay
+# keeps that kind of thing; the ticked ones written, the switch offered, and
+# only after a switch that worked, the copies outside Nix removed. piste
+# drift reports from the same scan and eval. Every run starts from the
+# overlay as committed.
+env USER=jane
+exec sh mk.sh
+cp nix-shim $WORK/.shims/nix
+chmod 0755 $WORK/.shims/nix
+cp pnpm-shim $WORK/.shims/pnpm
+chmod 0755 $WORK/.shims/pnpm
+[linux] cp declared-linux.json $WORK/declared.json
+[darwin] cp declared-darwin.json $WORK/declared.json
+cd ck/overlays/jane
+
+# drift: the duplicates and what isn't declared, with piste adopt's hints;
+# nothing written.
+exec piste drift
+stdout 'Also provided by Nix'
+stdout 'npm +typescript'
+stdout 'pip +black'
+stdout 'cargo +ripgrep-all +nixpkgs ripgrep-all 0.10.9'
+stdout 'cargo +my-tool +no nixpkgs package by that name'
+[darwin] stdout 'brew +example/tap/foo +from a tap'
+[darwin] stdout 'brew +tailscale +Homebrew brews \(a brew service; Nix wouldn.t run it\)'
+[darwin] ! stdout 'firefox'
+exec git status --porcelain
+! stdout .
+
+# All yes: written where the overlay keeps each kind, switched, then the
+# copies outside Nix that Nix now provides removed.
+exec sh $WORK/reset.sh
+stdin $WORK/yes.txt
+exec piste adopt
+cmpwork stdout $GOLDEN/adopt/all-yes.out
+[linux] cmp hosts/testhost.nix $WORK/want/linux-testhost.nix
+[darwin] cmp hosts/testhost.nix $WORK/want/darwin-testhost.nix
+cmp modules/js.nix $WORK/want/js.nix
+[linux] grep '^home-manager switch -b backup-[0-9]+ --flake .*/ck/overlays/jane#jane@testhost --override-input piste git\+file://.*/ck$' $WORK/calls
+[darwin] grep '^sudo darwin-rebuild switch --flake .*/ck/overlays/jane#testhost --override-input piste git\+file://.*/ck$' $WORK/calls
+grep '^npm rm -g prettier typescript$' $WORK/calls
+grep '^cargo uninstall ripgrep-all$' $WORK/calls
+grep '^pip uninstall --yes httpie black$' $WORK/calls
+[darwin] grep '^brew uninstall ripgrep jq$' $WORK/calls
+[darwin] grep '^brew services list --json$' $WORK/calls
+! grep '^pnpm rm' $WORK/calls
+exec sh $WORK/order.sh
+stdout '^ok$'
+
+# The switch's pnpm hook didn't install prettier (pnpm missing, or its add
+# failed): npm's copy stays, and it says so; typescript, which pnpm has,
+# still goes.
+exec sh $WORK/reset.sh
+mv $WORK/replies/pnpm-list-after $WORK/pnpm-list-after
+stdin $WORK/yes.txt
+exec piste adopt
+stdout 'Kept npm.s prettier: pnpm doesn.t have it yet'
+grep '^npm rm -g typescript$' $WORK/calls
+! grep '^npm rm -g .*prettier' $WORK/calls
+mv $WORK/pnpm-list-after $WORK/replies/pnpm-list-after
+
+# An item declined: not written, not removed.
+exec sh $WORK/reset.sh
+[linux] stdin $WORK/decline-linux.txt
+[darwin] stdin $WORK/decline-darwin.txt
+exec piste adopt
+! grep '"prettier"' modules/js.nix
+grep '"tsx"' modules/js.nix
+grep '^npm rm -g typescript$' $WORK/calls
+
+# Later: written, but no switch and nothing removed; the rerun will.
+exec sh $WORK/reset.sh
+[linux] stdin $WORK/later-linux.txt
+[darwin] stdin $WORK/later-darwin.txt
+exec piste adopt
+stdout 'run piste adopt again'
+grep '"prettier"' modules/js.nix
+! grep '^(home-manager|sudo) ' $WORK/calls
+! grep ' (uninstall|rm) ' $WORK/calls
+
+# Again, after Later: what was written now evaluates as declared, so
+# nothing is offered; the duplicates take the switch, then go. A removal
+# that fails is named and the next one still runs.
+[linux] cp $WORK/declared-again.json $WORK/declared.json
+[linux] rm $WORK/calls
+[linux] env SHIM_EXIT_CARGO=1
+[linux] stdin $WORK/yes.txt
+[linux] exec piste adopt
+[linux] ! stdout 'Adopt '
+[linux] stdout '`cargo uninstall ripgrep-all` failed: run it yourself'
+[linux] grep '^home-manager switch ' $WORK/calls
+[linux] grep '^npm rm -g prettier typescript$' $WORK/calls
+[linux] grep '^pip uninstall --yes httpie black$' $WORK/calls
+[linux] env SHIM_EXIT_CARGO=
+[linux] cp $WORK/declared-linux.json $WORK/declared.json
+
+# The switch fails: nothing removed, and it says so.
+exec sh $WORK/reset.sh
+env SHIM_EXIT_HOME_MANAGER=1
+env SHIM_EXIT_SUDO=1
+stdin $WORK/yes.txt
+! exec piste adopt
+stdout 'Nothing removed: the switch didn.t finish'
+stdout 'To have Claude Code fix it: piste fix\nNothing removed'
+! grep ' (uninstall|rm) ' $WORK/calls
+env SHIM_EXIT_HOME_MANAGER=
+env SHIM_EXIT_SUDO=
+
+# No list for a kind: the other kinds written, the flow finished, the list
+# named for adding by hand, exit 1.
+[linux] exec sh $WORK/reset.sh
+[linux] cp $WORK/declared-nolist.json $WORK/declared.json
+[linux] stdin $WORK/yes.txt
+[linux] ! exec piste adopt
+[linux] stdout 'Add by hand: pkgs.ripgrep-all pkgs.httpie into home.packages in hosts/testhost.nix'
+[linux] grep '"tsx"' modules/js.nix
+[linux] ! grep 'ripgrep-all' hosts/testhost.nix
+[linux] grep '^home-manager switch ' $WORK/calls
+[linux] grep '^npm rm -g prettier typescript$' $WORK/calls
+[linux] ! grep '^cargo ' $WORK/calls
+[linux] cp $WORK/declared-linux.json $WORK/declared.json
+
+# The eval fails: stopped, nothing written.
+exec sh $WORK/reset.sh
+env NIX_DECLARED_FAILS=1
+! exec piste adopt
+stderr 'Couldn.t read what (jane@)?testhost declares: error: attribute .jane@testhost. missing'
+stderr 'build` to see why'
+exec git status --porcelain
+! stdout .
+! exec piste drift
+stderr 'Couldn.t read what'
+env NIX_DECLARED_FAILS=
+
+# No answers at all (a closed pipe): nothing written, switched or removed.
+exec sh $WORK/reset.sh
+stdin $WORK/empty.txt
+! exec piste adopt
+stderr 'nothing written'
+exec git status --porcelain
+! stdout .
+! grep '^(home-manager|sudo) ' $WORK/calls
+
+# Nothing outside Nix: nothing to do.
+exec sh $WORK/reset.sh
+exec sh $WORK/nothing.sh
+exec piste adopt
+stdout 'Nothing to adopt.'
+! stdout 'Left as they are'
+exec piste drift
+stdout 'No drift'
+
+-- mk.sh --
+set -e
+mkdir -p replies home/.cargo/bin want
+printf '{"dependencies": {"npm": {}, "prettier": {}, "typescript": {}}}' > replies/npm-list
+printf '[{"dependencies": {"typescript": {}, "tsx": {}}}]' > replies/pnpm-list
+printf '[{"dependencies": {"typescript": {}, "tsx": {}, "prettier": {}}}]' > replies/pnpm-list-after
+printf '[{"name": "httpie"}, {"name": "requests"}, {"name": "black"}]' > replies/pip-list
+printf 'ripgrep\npython@3.12\nexample/tap/foo\nmas\njq\ntailscale\n' > replies/brew-leaves
+printf '[{"name": "tailscale", "status": "started", "user": "root", "file": "/Library/LaunchDaemons/homebrew.mxcl.tailscale.plist", "exit_code": 0}, {"name": "redis", "status": "none", "user": null, "file": "/opt/homebrew/opt/redis/homebrew.mxcl.redis.plist", "exit_code": null}]' > replies/brew-services
+printf 'slack\nfirefox\n' > replies/brew-list
+touch home/.cargo/bin/ripgrep-all home/.cargo/bin/my-tool
+mv linux-testhost.nix darwin-testhost.nix js.nix want/
+mkdir ck && cd ck
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+mkdir overlays && mv ../jane overlays/jane && cd overlays/jane
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+-- reset.sh --
+cd "$WORK/ck/overlays/jane" && git checkout -q -- . && rm -f "$WORK/calls"
+-- nothing.sh --
+cd "$WORK"
+printf '{}' > replies/npm-list
+printf '[]' > replies/pnpm-list
+printf '[]' > replies/pip-list
+printf '[]' > replies/brew-services
+: > replies/brew-leaves
+: > replies/brew-list
+rm -f home/.cargo/bin/*
+-- order.sh --
+# The switch comes before any removal.
+c="$WORK/calls"
+s=$(grep -nE '^(home-manager|sudo) ' "$c" | head -1 | cut -d: -f1)
+r=$(grep -nE ' (uninstall|rm) ' "$c" | head -1 | cut -d: -f1)
+[ -n "$s" ] && [ -n "$r" ] && [ "$s" -lt "$r" ] && echo ok
+-- nix-shim --
+#!/bin/sh
+# adopt.txtar's nix: the host names for the switch's lookups, what the host
+# declares for drift's eval.
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+case "$*" in
+*"builtins.attrNames"*) echo '["testhost", "jane@testhost"]' ;;
+*"--apply ("*)
+  if [ -n "$NIX_DECLARED_FAILS" ]; then
+    echo "error: attribute 'jane@testhost' missing" >&2
+    exit 1
+  fi
+  cat "$WORK/declared.json" ;;
+esac
+exit 0
+-- pnpm-shim --
+#!/bin/sh
+# adopt.txtar's pnpm: its globals, and once a switch has run, what the
+# switch's activation installed (replies/pnpm-list-after, if there).
+{ printf 'pnpm'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ "$1" = list ]; then
+  r="$WORK/replies/pnpm-list"
+  if [ -f "$WORK/replies/pnpm-list-after" ] && grep -qE '^(home-manager|sudo) ' "$WORK/calls"; then
+    r="$WORK/replies/pnpm-list-after"
+  fi
+  cat "$r"
+fi
+exit 0
+-- yes.txt --
+
+
+
+
+
+
+
+
+
+
+
+
+-- empty.txt --
+-- decline-linux.txt --
+n
+
+
+
+
+
+
+
+
+
+
+
+
+-- decline-darwin.txt --
+
+
+
+
+n
+
+
+
+
+
+
+
+
+
+
+
+
+-- later-linux.txt --
+
+
+
+
+n
+-- later-darwin.txt --
+
+
+
+
+
+
+
+
+n
+-- declared-linux.json --
+{"nix": ["piste", "black", "jq"], "casks": ["firefox"], "brews": ["mas"], "exclude": [],
+ "files": {"home.packages": ["/nix/store/00000000000000000000000000000001-source/modules/roles/dev.nix", "/nix/store/00000000000000000000000000000002-source/hosts/testhost.nix"]},
+ "pkgs": {"ripgrep": {"pname": "ripgrep", "version": "15.2.0"}, "ripgrep-all": {"pname": "ripgrep-all", "version": "0.10.9"},
+          "httpie": {"pname": "httpie", "version": "3.2.4"}, "black": {"pname": "black", "version": "25.1.0"}, "jq": {"pname": "jq", "version": "1.8.1"}}}
+-- declared-darwin.json --
+{"nix": ["piste", "black", "jq"], "casks": ["firefox"], "brews": ["mas"], "exclude": [],
+ "files": {"piste.packages.extraPackages": ["/nix/store/00000000000000000000000000000002-source/hosts/testhost.nix"],
+           "environment.systemPackages": ["/nix/store/00000000000000000000000000000001-source/modules/platforms/darwin.nix"],
+           "piste.packages.casks.extra": ["/nix/store/00000000000000000000000000000002-source/hosts/testhost.nix"],
+           "homebrew.casks": ["/nix/store/00000000000000000000000000000001-source/modules/platforms/darwin.nix"],
+           "piste.packages.brews.extra": ["/nix/store/00000000000000000000000000000002-source/hosts/testhost.nix"],
+           "homebrew.brews": ["/nix/store/00000000000000000000000000000001-source/modules/platforms/darwin.nix"]},
+ "pkgs": {"ripgrep": {"pname": "ripgrep", "version": "15.2.0"}, "ripgrep-all": {"pname": "ripgrep-all", "version": "0.10.9"},
+          "httpie": {"pname": "httpie", "version": "3.2.4"}, "black": {"pname": "black", "version": "25.1.0"}, "jq": {"pname": "jq", "version": "1.8.1"},
+          "tailscale": {"pname": "tailscale", "version": "1.90.6"}}}
+-- declared-again.json --
+{"nix": ["piste", "black", "jq", "ripgrep-all", "httpie"], "casks": [], "brews": [], "exclude": [],
+ "files": {"home.packages": ["/nix/store/00000000000000000000000000000002-source/hosts/testhost.nix"]},
+ "pkgs": {"ripgrep-all": {"pname": "ripgrep-all", "version": "0.10.9"}, "httpie": {"pname": "httpie", "version": "3.2.4"},
+          "black": {"pname": "black", "version": "25.1.0"}}}
+-- declared-nolist.json --
+{"nix": ["piste", "black"], "casks": [], "brews": [], "exclude": [],
+ "files": {"home.packages": ["/nix/store/00000000000000000000000000000001-source/modules/roles/dev.nix"]},
+ "pkgs": {"ripgrep-all": {"pname": "ripgrep-all", "version": "0.10.9"}, "httpie": {"pname": "httpie", "version": "3.2.4"},
+          "black": {"pname": "black", "version": "25.1.0"}}}
+-- jane/flake.nix --
+{ outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake { inherit inputs self; user = "jane"; zone = "personal"; hosts = { }; }; }
+-- jane/hosts/testhost.nix --
+{ config, pkgs, user, piste, ... }:
+{
+  home.packages = [ piste.packages.${pkgs.stdenv.hostPlatform.system}.piste ];
+
+  # This Mac's own packages; `piste adopt` adds what you installed outside Nix here.
+  piste.packages.extraPackages = with pkgs; [ ];
+  piste.packages.casks.extra = [ ];
+  piste.packages.brews.extra = [ ];
+}
+-- jane/modules/js.nix --
+{ ... }:
+let
+  pnpmPackages = [
+    "typescript"
+  ];
+in
+{ }
+-- jane/modules/devcontainer.nix --
+# Not imported by this host (files doesn't name it): never written to.
+{ pkgs, ... }:
+{
+  home.packages = [ ];
+  piste.packages.extraPackages = [ ];
+}
+-- linux-testhost.nix --
+{ config, pkgs, user, piste, ... }:
+{
+  home.packages = [
+    piste.packages.${pkgs.stdenv.hostPlatform.system}.piste
+    pkgs.ripgrep-all
+    pkgs.httpie
+  ];
+
+  # This Mac's own packages; `piste adopt` adds what you installed outside Nix here.
+  piste.packages.extraPackages = with pkgs; [ ];
+  piste.packages.casks.extra = [ ];
+  piste.packages.brews.extra = [ ];
+}
+-- darwin-testhost.nix --
+{ config, pkgs, user, piste, ... }:
+{
+  home.packages = [ piste.packages.${pkgs.stdenv.hostPlatform.system}.piste ];
+
+  # This Mac's own packages; `piste adopt` adds what you installed outside Nix here.
+  piste.packages.extraPackages = with pkgs; [
+    ripgrep
+    ripgrep-all
+    httpie
+  ];
+  piste.packages.casks.extra = [
+    "slack"
+  ];
+  piste.packages.brews.extra = [
+    "python@3.12"
+    "tailscale"
+  ];
+}
+-- js.nix --
+{ ... }:
+let
+  pnpmPackages = [
+    "typescript"
+    "prettier"
+    "tsx"
+  ];
+in
+{ }

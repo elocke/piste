@@ -1,0 +1,9 @@
+overlays/other already has box
+Flake: $WORK/ck/overlays/other (checkout $WORK/ck: overlay other (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+Setting this machine's hostname to box for now.
+The switch won't name this machine box: its networking.hostName is "" (a module the host imports leaves the name to Proxmox, cloud-init or DHCP), and piste finds this machine's host by its hostname.
+  To keep box: name the VM box in Proxmox (cloud-init sets the hostname from it), or set proxmox.cloudInit.enable = false; in hosts/box/default.nix (cloud-init then configures no network: only for a VM that gets its address by DHCP).
+  To keep it: git -C $WORK/ck/overlays/other commit -m 'Add box' -- flake.nix hosts/box && git -C $WORK/ck/overlays/other push

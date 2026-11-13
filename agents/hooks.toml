@@ -1,0 +1,47 @@
+# Owned hooks, rendered for each harness by piste.agents.
+# Work-safe: any zone may select them. A host gets a hook only when one of its
+# presets lists it under `hooks = [...]`.
+#
+# Canonical vocabulary (ported from rulesync's tool-hooks-converter):
+#   event    preToolUse | postToolUse | userPromptSubmit | sessionStart | stop
+#            (rendered PascalCase for Claude and Codex)
+#   matcher  a tool-name regex; Claude and Codex both call the shell tool "Bash"
+#   script   a file in hooks/, installed at ~/.local/share/piste-agents/hooks/bin/<name
+#            without extension>; the harness command is that stable path, so a
+#            rebuild never changes the command (or the Codex trust hash)
+#   targets  harnesses to render for (claude, codex); Hermes: none
+#
+# Delivery: Claude gets the local plugin piste-harness@piste-local; Codex gets
+# owned entries appended to ~/.codex/hooks.json and trusted by hash. Both via
+# `piste agents sync --user`; foreign hooks (another tool's) are never touched.
+
+[[hook]]
+name = "rtk-rewrite"
+event = "preToolUse"
+matcher = "Bash"
+script = "rtk-rewrite.sh"
+timeout = 10
+targets = ["claude", "codex"]
+
+[[hook]]
+name = "guard-bash"
+event = "preToolUse"
+matcher = "Bash"
+script = "piste-guard.py"
+timeout = 45 # a commit runs gitleaks over the staged diff
+targets = ["claude", "codex"]
+
+# Codex has no Read/Grep tools (it reads through the shell, covered above).
+[[hook]]
+name = "guard-read"
+event = "preToolUse"
+matcher = "Read|Grep"
+script = "piste-guard.py"
+timeout = 10
+targets = ["claude"]
+
+# Hooks that do the same job: `piste agents check` reports one still active as
+# a conflict, since it would rewrite or block twice.
+[replaces]
+claude_plugins = ["safety-hooks@cctools-plugins"]
+hook_commands = [".claude/hooks/rtk-rewrite.sh"]

@@ -1,0 +1,8 @@
+overlays/mine already has testhost
+Flake: $WORK/ck/overlays/mine (checkout $WORK/ck: overlay mine (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+The switch won't name this machine testhost: its networking.hostName is "" (a module the host imports leaves the name to Proxmox, cloud-init or DHCP), and piste finds this machine's host by its hostname.
+  To keep testhost: set networking.hostName = lib.mkOverride 49 "testhost"; in hosts/testhost/default.nix (lib among its arguments).
+  To keep it: git -C $WORK/ck/overlays/mine commit -m 'Add testhost' -- flake.nix hosts/testhost && git -C $WORK/ck/overlays/mine push

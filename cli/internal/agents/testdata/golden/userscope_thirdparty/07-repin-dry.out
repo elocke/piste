@@ -1,0 +1,24 @@
+piste-agents: would run: claude plugin marketplace update piste-local
+note: claude.marketplace new: not locked; run `piste agents update` first
+would remove marketplace drift (github:o/drift); Claude uninstalls its plugins and deletes their saved options/data
+  $ claude plugin marketplace remove drift
+would pin mirror $WORK/h/.local/share/piste-agents/marketplaces/drift at bbbbbbbbbbbb
+  $ git clone/checkout https://github.com/o/drift.git @ bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb -> $WORK/h/.local/share/piste-agents/marketplaces/drift
+would add marketplace drift (pinned mirror)
+  $ claude plugin marketplace add $WORK/h/.local/share/piste-agents/marketplaces/drift
+would install gone@urlm
+  $ claude plugin install gone@urlm --scope user
+would disable gone@urlm (declared enabled = false)
+  $ claude plugin disable gone@urlm --scope user
+would install missing@good
+  $ claude plugin install missing@good --scope user
+would enable off@good
+  $ claude plugin enable off@good --scope user
+would update old@good to the locked marketplace
+  $ claude plugin update old@good --scope user
+would disable pua@urlm (declared enabled = false)
+  $ claude plugin disable pua@urlm --scope user
+would add codex plugin figma@openai-curated
+  $ codex plugin add figma@openai-curated
+would pin drifty@2.0.0 in the pnpm bucket
+  $ pnpm add -g drifty@2.0.0

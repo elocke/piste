@@ -1,0 +1,13 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+nix flake archive --json $WORK/flake
+nix eval --json $WORK/flake#nixosConfigurations."testhost".config --apply (preflight.nix) "tester" --no-write-lock-file
+findmnt -no SOURCE /
+getent passwd tester
+sudo nixos-rebuild switch --flake $WORK/flake#testhost
+nixos-rebuild switch --flake $WORK/flake#testhost
+getent passwd tester
+sudo nix-env --profile $WORK/.machine/profiles/system --switch-generation 41
+nix-env --profile $WORK/.machine/profiles/system --switch-generation 41
+sudo $WORK/gens/41/bin/switch-to-configuration switch
+switch-to-configuration(gen 41) switch

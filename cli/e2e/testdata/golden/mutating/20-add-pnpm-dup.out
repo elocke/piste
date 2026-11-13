@@ -1,0 +1,2 @@
+Target flake: $WORK/h/piste/overlays/personal
+'zen-mcp' already exists in js-globals.nix pnpm globals

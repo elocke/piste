@@ -1,0 +1,11 @@
+{
+  "claude": {
+    "marketplace": "piste-local",
+    "plugin": "piste-harness@piste-local"
+  },
+  "codex_groups": [
+    "bad4a6276bfe92f11730099ec09cc078ee3b7ac4b1d4288e43b94a0773166a1b"
+  ],
+  "codex_target": ".codex/hooks.json",
+  "version": 2
+}

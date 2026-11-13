@@ -1,0 +1,224 @@
+[
+  {
+    "state": "ok",
+    "kind": "hooks",
+    "target": "claude:piste-harness@piste-local",
+    "detail": "0.0.0-x"
+  },
+  {
+    "state": "policy",
+    "kind": "skill",
+    "target": "blocked",
+    "detail": "source github:evil/x is not in [policy] allow"
+  },
+  {
+    "state": "policy",
+    "kind": "tool",
+    "target": "weird",
+    "detail": "source brew:weird is not in [policy] allow"
+  },
+  {
+    "state": "drift",
+    "kind": "skill",
+    "target": "blocked",
+    "detail": "declared but not in agents.lock (run piste agents update)"
+  },
+  {
+    "state": "drift",
+    "kind": "skill",
+    "target": "stale",
+    "detail": "agents.lock entry is stale (source/path/ref changed)"
+  },
+  {
+    "state": "drift",
+    "kind": "skill",
+    "target": "unlocked",
+    "detail": "declared but not in agents.lock (run piste agents update)"
+  },
+  {
+    "state": "drift",
+    "kind": "claude.marketplace",
+    "target": "drift",
+    "detail": "at cccccccccccc, lock bbbbbbbbbbbb"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.marketplace",
+    "target": "good",
+    "detail": "aaaaaaaaaaaa (github:o/good)"
+  },
+  {
+    "state": "missing",
+    "kind": "claude.marketplace",
+    "target": "new",
+    "detail": "github:o/new"
+  },
+  {
+    "state": "floating",
+    "kind": "claude.marketplace",
+    "target": "src",
+    "detail": "at eeeeeeeeeeee, lock dddddddddddd (pin = source: added from its source, not mirrored)"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.marketplace",
+    "target": "urlm",
+    "detail": "marketplace.json 6d4cd970f37f, lock 6d4cd970f37f @ abababababab (url source: added from its URL, not mirrored)"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.marketplace",
+    "target": "piste-local",
+    "detail": "owned by piste (hook carrier; `piste agents check` hook rows)"
+  },
+  {
+    "state": "tolerated",
+    "kind": "claude.marketplace",
+    "target": "strayMarket",
+    "detail": "git:https://git.example/x.git"
+  },
+  {
+    "state": "floating",
+    "kind": "claude.plugin",
+    "target": "float@src",
+    "detail": "0.9 (lock 1.0); marketplace pin = source"
+  },
+  {
+    "state": "missing",
+    "kind": "claude.plugin",
+    "target": "gone@urlm",
+    "detail": ""
+  },
+  {
+    "state": "ok",
+    "kind": "claude.plugin",
+    "target": "lsp@urlm",
+    "detail": "unknown"
+  },
+  {
+    "state": "missing",
+    "kind": "claude.plugin",
+    "target": "missing@good",
+    "detail": ""
+  },
+  {
+    "state": "drift",
+    "kind": "claude.plugin",
+    "target": "off@good",
+    "detail": "disabled; not in agents.lock"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.plugin",
+    "target": "ok@good",
+    "detail": "1.0.0 111111111111"
+  },
+  {
+    "state": "drift",
+    "kind": "claude.plugin",
+    "target": "old@good",
+    "detail": "version 1.0.0 != lock 2.0.0"
+  },
+  {
+    "state": "drift",
+    "kind": "claude.plugin",
+    "target": "pua@urlm",
+    "detail": "enabled (declared enabled = false)"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.plugin",
+    "target": "quiet@good",
+    "detail": "1.0.0"
+  },
+  {
+    "state": "tolerated",
+    "kind": "claude.plugin",
+    "target": "keep@good",
+    "detail": "1"
+  },
+  {
+    "state": "ok",
+    "kind": "claude.plugin",
+    "target": "piste-harness@piste-local",
+    "detail": "owned by piste (hook carrier; `piste agents check` hook rows)"
+  },
+  {
+    "state": "undeclared",
+    "kind": "claude.plugin",
+    "target": "stray@good",
+    "detail": "3.1"
+  },
+  {
+    "state": "drift",
+    "kind": "codex.plugin",
+    "target": "canva@openai-curated",
+    "detail": "disabled"
+  },
+  {
+    "state": "missing",
+    "kind": "codex.plugin",
+    "target": "figma@openai-curated",
+    "detail": ""
+  },
+  {
+    "state": "ok",
+    "kind": "codex.plugin",
+    "target": "github@openai-curated",
+    "detail": "0.1.0 (remote)"
+  },
+  {
+    "state": "undeclared",
+    "kind": "codex.plugin",
+    "target": "extra@local",
+    "detail": "1.0"
+  },
+  {
+    "state": "ok",
+    "kind": "mcp",
+    "target": "playwright",
+    "detail": "npm:@playwright/mcp@0.0.83"
+  },
+  {
+    "state": "ok",
+    "kind": "mcp",
+    "target": "uvtool",
+    "detail": "pypi:mcp-thing@1.2"
+  },
+  {
+    "state": "ok",
+    "kind": "hook",
+    "target": "hindsight",
+    "detail": "npm:@vectorize-io/hindsight-coding-agents@0.7.0"
+  },
+  {
+    "state": "tolerated",
+    "kind": "hook",
+    "target": "paseo",
+    "detail": "follows its binary"
+  },
+  {
+    "state": "drift",
+    "kind": "tool",
+    "target": "drifty",
+    "detail": "installed 1.0.0 != lock 2.0.0"
+  },
+  {
+    "state": "ok",
+    "kind": "tool",
+    "target": "githits",
+    "detail": "npm:githits@0.6.6"
+  },
+  {
+    "state": "missing",
+    "kind": "tool",
+    "target": "rtk",
+    "detail": "nix:piste#rtk not on PATH (piste switch)"
+  },
+  {
+    "state": "policy",
+    "kind": "tool",
+    "target": "weird",
+    "detail": "source \"brew:weird\": tools come from nix: or npm:"
+  }
+]

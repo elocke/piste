@@ -1,0 +1,3 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.darwinConfigurations or { }) --no-write-lock-file
+nix flake archive --json $WORK/flake
+sudo darwin-rebuild switch --flake $WORK/flake#testhost

@@ -1,0 +1,90 @@
+# The Claude carrier moved or renamed (its plugin, its marketplace's directory,
+# or its marketplace's name). Sync leaves nothing of the old carrier installed and
+# installs the new one:
+#  - moved: the marketplace is registered from a directory that is gone, so it
+#    is removed (claude uninstalls its plugins, old-harness with them) and added
+#    from ours;
+#  - same: the marketplace is ours, only the plugin id changed: the plugin the
+#    ledger owns is uninstalled;
+#  - renamed: the old marketplace has another name (old-local): the old
+#    plugin is uninstalled, the old marketplace removed, and ours added.
+# The fake claude behaves like claude here: `marketplace update` fails on a
+# missing source, `marketplace remove` uninstalls the marketplace's plugins.
+[!fakes] skip 'PISTE_AGENTS_FAKES not set'
+
+chmod 0755 bin/claude
+chmod 0755 bin/codex
+env PATH=$WORK/bin${:}$PATH
+env HOME=$WORK/h
+
+exec sh scenario.sh moved
+exec cat state.json
+stdout '"piste-harness@piste-local": \{"version": "0.0.0-new", "enabled": true'
+! stdout 'old-harness'
+stdout '"piste-local": \{"path": "[^"]*/market"\}'
+! stdout 'old-market'
+grep 'plugin marketplace remove piste-local' state.json.log
+grep 'plugin marketplace add .*/market$' state.json.log
+grep 'plugin install piste-harness@piste-local --scope user' state.json.log
+! grep 'plugin marketplace update' state.json.log
+grep '"plugin": "piste-harness@piste-local"' h/.local/state/piste-agents/ledger.json
+grep '^ok +hooks +claude:piste-harness@piste-local' out/check.out
+
+exec sh scenario.sh same
+exec cat state.json
+stdout '"piste-harness@piste-local": \{"version": "0.0.0-new", "enabled": true'
+! stdout 'old-harness'
+grep 'plugin uninstall old-harness@piste-local' state.json.log
+grep 'plugin marketplace update piste-local' state.json.log
+! grep 'plugin marketplace remove' state.json.log
+grep '^ok +hooks +claude:piste-harness@piste-local' out/check.out
+
+exec sh scenario.sh renamed
+exec cat state.json
+stdout '"piste-harness@piste-local": \{"version": "0.0.0-new", "enabled": true'
+! stdout 'old-local'
+grep 'plugin uninstall piste-harness@old-local' state.json.log
+grep 'plugin marketplace remove old-local' state.json.log
+grep 'plugin marketplace add .*/market$' state.json.log
+grep 'plugin install piste-harness@piste-local --scope user' state.json.log
+grep '"marketplace": "piste-local"' h/.local/state/piste-agents/ledger.json
+grep '^ok +hooks +claude:piste-harness@piste-local' out/check.out
+
+-- bin/claude --
+#!/bin/sh
+exec python3 "$FAKES/claude" "$@"
+-- bin/codex --
+#!/bin/sh
+exec python3 "$FAKES/codex" "$@"
+-- scenario.sh --
+# usage: scenario.sh moved|same|renamed — the old carrier installed, then one sync
+set -e
+rm -rf h out market state.json state.json.log
+mkdir -p out h/.claude h/.codex h/.local/state/piste-agents market/.claude-plugin market/piste-harness/.claude-plugin market/old-harness/.claude-plugin
+printf '{"name": "piste-local"}' > market/.claude-plugin/marketplace.json
+printf '{"version": "0.0.0-new"}' > market/piste-harness/.claude-plugin/plugin.json
+printf '{"version": "0.0.0-old"}' > market/old-harness/.claude-plugin/plugin.json
+printf '{}' > h/.claude/settings.json
+if [ "$1" = moved ]; then old="$PWD/old-market"; else old="$PWD/market"; fi
+sfx=; [ "$1" = renamed ] && sfx=-renamed
+sed "s|OLD|$old|g" claude-state$sfx.json > state.json
+cp ledger$sfx.json h/.local/state/piste-agents/ledger.json
+export FAKE_CLAUDE_STATE="$PWD/state.json"
+sed "s|MARKET|$PWD/market|g" manifest.json > m.json
+PISTE_AGENTS_TOOL=1 piste agents sync --user --manifest "$PWD/m.json" > out/sync.out 2> out/sync.err
+PISTE_AGENTS_TOOL=1 piste agents check --manifest "$PWD/m.json" > out/check.out 2>&1 || true
+-- claude-state.json --
+{"marketplaces": {"piste-local": {"path": "OLD"}}, "plugins": {"old-harness@piste-local": {"version": "0.0.0-old", "enabled": true, "scope": "user"}}}
+-- ledger.json --
+{"claude": {"marketplace": "piste-local", "plugin": "old-harness@piste-local"}, "version": 1}
+-- claude-state-renamed.json --
+{"marketplaces": {"old-local": {"path": "OLD"}}, "plugins": {"piste-harness@old-local": {"version": "0.0.0-old", "enabled": true, "scope": "user"}}}
+-- ledger-renamed.json --
+{"claude": {"marketplace": "old-local", "plugin": "piste-harness@old-local"}, "version": 1}
+-- manifest.json --
+{"version": 2, "links": [], "instructions": [], "deferred": [], "hooks": {
+  "bin_dir": ".local/share/piste-agents/hooks/bin",
+  "replaces": {"claude_plugins": [], "hook_commands": []},
+  "claude": {"marketplace": "MARKET", "marketplace_name": "piste-local", "plugin": "piste-harness@piste-local", "version": "0.0.0-new",
+             "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\"", "timeout": 45}]}]}},
+  "codex": {}}}

@@ -1,0 +1,6 @@
+npm list -g --depth=0 --json
+pnpm list -g --depth=0 --json
+pip list --user --format=json
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#nixosConfigurations."testhost" --apply (declared.nix) [ "leftpad" "githits" "stray" ]

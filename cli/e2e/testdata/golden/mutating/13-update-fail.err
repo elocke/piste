@@ -1,0 +1,1 @@
+nix flake update home-manager --flake $WORK/h/piste/overlays/personal exited with status 1.

@@ -1,0 +1,2 @@
+configuration.nix:8: /home/user/extra.nix is outside /etc/nixos, so it isn't carried over
+configuration.nix:10: <home-manager/nixos> is a channel lookup, which the flake build can't resolve

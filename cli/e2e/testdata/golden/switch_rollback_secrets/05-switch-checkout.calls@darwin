@@ -1,0 +1,3 @@
+nix eval --json $WORK/piste/overlays/o#. --override-input piste git+file://$WORK/piste --apply o: builtins.attrNames (o.darwinConfigurations or { }) --no-write-lock-file
+nix flake archive --json $WORK/piste/overlays/o --override-input piste git+file://$WORK/piste
+sudo darwin-rebuild switch --flake $WORK/piste/overlays/o#testhost --override-input piste git+file://$WORK/piste

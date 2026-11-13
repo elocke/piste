@@ -1,0 +1,1 @@
+"nixos" is NixOS's default hostname: give this machine its own name with --name

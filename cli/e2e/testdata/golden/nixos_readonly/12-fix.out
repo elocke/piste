@@ -1,0 +1,5 @@
+Flake: $WORK/flake
+engine override: none (flake has no piste input)
+Rebuilding testhost as piste switch would, without activating...
+✓ testhost builds, so the failure was in activation, or it's gone.
+Full log: $WORK/home/.local/state/piste/fix.log

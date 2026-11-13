@@ -1,0 +1,4 @@
+piste switch: refusing, the new configuration would lock you out:
+  you're connected over SSH and the new config gives tester no SSH keys: add users.users.tester.openssh.authorizedKeys.keys to your host
+  sudo needs no password today, and the new config would ask for one tester doesn't have: set security.sudo.wheelNeedsPassword = false or give the user a password (if you do have one, run piste switch --force)
+Fix it, or run piste switch --force to switch anyway.

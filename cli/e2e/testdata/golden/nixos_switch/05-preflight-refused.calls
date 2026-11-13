@@ -1,0 +1,6 @@
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.nixosConfigurations or { }) --no-write-lock-file
+nix eval --json $WORK/flake#. --apply o: builtins.attrNames (o.homeConfigurations or { }) --no-write-lock-file
+nix flake archive --json $WORK/flake
+nix eval --json $WORK/flake#nixosConfigurations."testhost".config --apply (preflight.nix) "tester" --no-write-lock-file
+sudo -n -k true
+findmnt -no SOURCE /

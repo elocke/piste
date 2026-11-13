@@ -1,0 +1,1 @@
+server is a NixOS host and this machine doesn't run NixOS: switching to it here would replace this system. Build it instead: piste build --host server

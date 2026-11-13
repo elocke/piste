@@ -1,0 +1,39 @@
+# lock_tamper_detected: flip one byte in a vendored skill, a
+# hook script, a subagent and an MCP entry → drift exits 1 and names each
+# file.
+
+mkdir proj/.git
+cd proj
+exec piste agents sync $RS
+exec piste agents drift $RS
+
+replace 'Alpha body.' 'Alpha bodY.' .agents/skills/alpha/SKILL.md
+replace 'exit 0' 'exit 1' .agents/hooks/guard.sh
+replace 'Be terse.' 'Be tersE.' .claude/agents/rev.md
+replace '"demo-mcp"' '"demo-mcP"' .mcp.json
+
+! exec piste agents drift $RS
+stdout '^edited +\.agents/skills/alpha '
+stdout '^edited +\.agents/hooks/guard\.sh '
+stdout '^edited +\.claude/agents/rev\.md '
+stdout '^edited +\.mcp\.json#/mcpServers/demo@json '
+stdout '4 edited'
+
+# sync refuses to overwrite the hand edits without --force.
+! exec piste agents sync $RS
+stderr 'edited since piste wrote it'
+exec piste agents sync --force $RS
+exec piste agents drift $RS
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+
+[[use]]
+id = "shared:skill/alpha"
+[[use]]
+id = "shared:agent/rev"
+[[use]]
+id = "shared:hook/guard"
+[[use]]
+id = "shared:mcp/demo"

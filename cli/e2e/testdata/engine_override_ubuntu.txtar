@@ -1,0 +1,84 @@
+# status, log and rollback on a Linux machine that isn't NixOS (Ubuntu)
+# whose engine override can't be resolved: $PISTE_ENGINE naming a path with
+# no flake, then an overlay in a checkout that isn't a git repository. They
+# don't need the override, and work as before NixOS hosts (exit 0, home-
+# manager's generations). A build still says what's wrong with it (exit 1):
+# not vacuous, the override really is bad. The overlays' locks have a piste
+# input, so an override would apply.
+[!linux] skip 'Ubuntu is Linux'
+
+chmod 0755 scenario.sh
+env USER=tester
+exec sh scenario.sh
+
+grep '^0$' out/01-status-engine.rc
+grep 'Last switch' out/01-status-engine.out
+! grep . out/01-status-engine.err
+grep '^0$' out/02-log-engine.rc
+grep '^home-manager generations$' out/02-log-engine.calls
+! grep . out/02-log-engine.err
+grep '^0$' out/03-rollback-engine.rc
+grep '^activate$' out/03-rollback-engine.calls
+grep 'Rolled back to generation 41!' out/03-rollback-engine.out
+grep '^1$' out/04-build-engine.rc
+grep '^PISTE_ENGINE=/nonexistent: no flake.nix in /nonexistent$' out/04-build-engine.err
+! grep '^nix build' out/04-build-engine.calls
+
+grep '^0$' out/05-status-not-git.rc
+grep 'Last switch' out/05-status-not-git.out
+! grep . out/05-status-not-git.err
+grep '^0$' out/06-log-not-git.rc
+grep '^home-manager generations$' out/06-log-not-git.calls
+! grep . out/06-log-not-git.err
+grep '^0$' out/07-rollback-not-git.rc
+grep '^activate$' out/07-rollback-not-git.calls
+grep '^1$' out/08-build-not-git.rc
+grep '^checkout \S+/ck is not a git repository: ' out/08-build-not-git.err
+! grep '^nix build' out/08-build-not-git.calls
+
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out" "$WORK/replies"
+# An overlay on its own, and one in a checkout (.piste) that git didn't
+# clone: no .git at its top.
+for d in "$WORK/flake" "$WORK/ck/overlays/mine"; do
+  mkdir -p "$d"
+  cp "$WORK/overlay.nix" "$d/flake.nix"
+  cp "$WORK/overlay.lock" "$d/flake.lock"
+  git -C "$d" init -q -b main
+  git -C "$d" add flake.nix flake.lock
+  git -C "$d" -c user.email=t@t -c user.name=t commit -q -m init
+done
+: > "$WORK/ck/.piste"
+printf '{ outputs = _: { }; }\n' > "$WORK/ck/flake.nix"
+# This home's names, and its two home-manager generations: 41 can be
+# activated.
+printf '["tester@testhost"]' > "$WORK/replies/nix"
+mkdir -p "$WORK/gen41"
+printf '#!/bin/sh\necho activate >> "$WORK/calls"\n' > "$WORK/gen41/activate"
+chmod 0755 "$WORK/gen41/activate"
+printf '2026-09-30 10:30 : id 42 -> /nix/store/gen42\n2026-09-29 09:00 : id 41 -> %s/gen41\n' "$WORK" > "$WORK/replies/home-manager"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+cd "$WORK/flake"
+export PISTE_ENGINE=/nonexistent
+run 01-status-engine status
+run 02-log-engine log
+run 03-rollback-engine rollback -y
+run 04-build-engine build
+unset PISTE_ENGINE
+cd "$WORK/ck/overlays/mine"
+run 05-status-not-git status
+run 06-log-not-git log
+run 07-rollback-not-git rollback -y
+run 08-build-not-git build
+exit 0
+-- overlay.nix --
+{ outputs = { self, piste }: { homeConfigurations = { }; }; }
+-- overlay.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs", "piste": "piste"}}, "piste": {"locked": {"lastModified": 4102444800}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}

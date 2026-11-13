@@ -1,0 +1,6 @@
+{
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "node \"/home/u/.hindsight/coding-agents/dist/codex-hook.js\"", "timeout": 30}]}],
+    "PreToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "if [ -n \"$PASEO_TERMINAL_ID\" ]; then \"${PASEO_HOOK_CLI:-paseo}\" hooks codex PreToolUse; fi", "timeout": 10}]}]
+  }
+}

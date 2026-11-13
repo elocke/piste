@@ -1,0 +1,9 @@
+# The piste-guard safety hooks (agents/hooks.toml), for Claude Code and Codex:
+# no dotenv reads, no whole-tree `git add`, no commit that gitleaks flags, no
+# `rm` of what git can't restore, no discarding uncommitted work. Opt-in, so a
+# host lists it explicitly. Needs
+# `piste agents sync --user` after the switch to install the Claude carrier and trust
+# the Codex entries. The rtk rewrite is the separate `rtk` preset.
+targets = ["claude", "codex"]
+
+hooks = ["guard-bash", "guard-read"]

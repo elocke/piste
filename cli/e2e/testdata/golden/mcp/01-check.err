@@ -1,0 +1,4 @@
+pw: unpinned — npm package "@playwright/mcp" has no exact version (use @playwright/mcp@<version>)
+claude-code: missing pw, tool
+claude-code: gw drifted (url, headers differ)
+codex: missing tool

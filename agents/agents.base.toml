@@ -1,0 +1,99 @@
+# Shared third-party defaults. Work-safe only: no personal
+# sources, no personal hosts. Every zone reads these declarations, so a
+# deny-unlisted zone must allow the source of each plugin, MCP
+# server and tool here or its hosts fail `piste build` (lib/agents.nix). Skills
+# and marketplaces are a catalog: a skill counts for a zone once one of its
+# presets selects it, a marketplace once one of its [[claude.plugin]]s names
+# it (x@<name>); an unused one is neither policy-checked, locked, checked nor
+# installed there. The shared `base` preset takes no skill, so a zone's
+# allow-list decides.
+#
+# Pins live in each ZONE's agents.lock (your overlay's agents/agents.lock),
+# written by `piste agents update` run in that zone repo with this file as the
+# base; there is no lock here. Locked [[skill]]s are deployed by the
+# piste.agents module as store fetches; plugins, marketplaces and tools are
+# reconciled by `piste agents sync --user` and reported by `piste agents check`.
+
+[policy]
+allow = [
+  "github:anthropics/claude-plugins-official",
+  "github:astral-sh/claude-code-plugins",
+  "github:manutej/luxor-claude-marketplace",
+  "github:pbakaus/impeccable",
+]
+require = "commit"
+
+# --- third-party skills ------------------------------------------------------
+
+# Verbatim upstream copy (MIT).
+[[skill]]
+name    = "vuejs-development"
+source  = "github:manutej/luxor-claude-marketplace"
+path    = "plugins/luxor-frontend-essentials/skills/vuejs-development"
+ref     = "1861cc9720d5656410415e5c19b06bef3e4609e8"
+mode    = "store"
+targets = ["claude", "codex"]
+
+# Impeccable (Apache-2.0), frontend design skill: catalog only. A zone opts in
+# with a Codex-target preset for this skill plus `impeccable@impeccable` as a
+# [[claude.plugin]] (the marketplace below). Upstream ships a copy per harness:
+# this is the Codex one (`$impeccable`, Codex subagent TOMLs in agents/); Claude
+# gets its own copy, agents and hooks from the plugin, so a preset must not
+# link this skill into ~/.claude/skills. The launcher fetches its engine binary
+# at the version in scripts/VERSION (sha256-checked) into ~/.impeccable/bin.
+[[skill]]
+name    = "impeccable"
+source  = "github:pbakaus/impeccable"
+path    = ".agents/skills/impeccable"
+ref     = "skill-v4.8.0"
+mode    = "store"
+targets = ["codex"]
+
+# --- Claude marketplaces and plugins -----------------------------------------
+
+# pin = "source": Claude reserves this name for the anthropics GitHub source, so
+# it can't be added from a pinned mirror; it floats (check reports "floating"
+# against the locked commit). Its plugins are still pinned by version.
+[[claude.marketplace]]
+name   = "claude-plugins-official"
+source = "github:anthropics/claude-plugins-official"
+pin    = "source"
+
+[[claude.marketplace]]
+name   = "astral-sh"
+source = "github:astral-sh/claude-code-plugins"
+
+# Catalog only: no plugin from it is declared here (zones opt in). Same
+# release tag as the [[skill]] above.
+[[claude.marketplace]]
+name   = "impeccable"
+source = "github:pbakaus/impeccable"
+ref    = "skill-v4.8.0"
+
+# No [[claude.plugin]] and no [[tool]] here: a declared plugin or tool is
+# installed by `piste agents sync --user` for every zone, whether a preset names it or
+# not, so these declarations are the catalogue and a zone opts in by declaring
+# the plugin in its own agents.toml. The marketplaces above count for a zone
+# only once one of its plugins names them. To take one, copy its block:
+#
+#   [[claude.plugin]]
+#   id    = "commit-commands@claude-plugins-official"   # slash commands for git
+#   scope = "user"
+#
+#   [[claude.plugin]]
+#   id    = "astral@astral-sh"                          # uv, ruff and ty skills
+#   scope = "user"
+#
+#   [[claude.plugin]]
+#   id    = "pyright-lsp@claude-plugins-official"       # needs pyright-langserver on PATH
+#   scope = "user"
+#
+#   [[claude.plugin]]
+#   id    = "typescript-lsp@claude-plugins-official"    # needs typescript-language-server on PATH
+#   scope = "user"
+#
+#   # rtk itself needs no declaration: the `rtk` preset puts it on PATH. Declare it
+#   # only to have `piste agents check` report and pin it.
+#   [[tool]]
+#   name   = "rtk"
+#   source = "nix:piste#rtk"

@@ -1,0 +1,21 @@
+Scanning for installs outside Nix...
+Reading what testhost declares...
+Left as they are:
+  brew   example/tap/foo  from a tap: add the tap to your flake first
+  cargo  my-tool          no nixpkgs package by that name
+  pip    requests         no nixpkgs package by that name
+Adopt into overlays/jane (testhost):
+  ripgrep      brew → nixpkgs ripgrep 15.2.0? [Y/n]:   python@3.12  brew → Homebrew brews? [Y/n]:   tailscale    brew → Homebrew brews (a brew service; Nix wouldn't run it)? [Y/n]:   slack        cask → Homebrew casks? [Y/n]:   prettier     npm → pnpm globals? [Y/n]:   tsx          pnpm → pnpm globals? [Y/n]:   ripgrep-all  cargo → nixpkgs ripgrep-all 0.10.9? [Y/n]:   httpie       pip → nixpkgs httpie 3.2.4? [Y/n]: Added to overlays/jane/hosts/testhost.nix:
+  extraPackages ripgrep ripgrep-all httpie · brews.extra python@3.12 tailscale · casks.extra slack
+Added to overlays/jane/modules/js.nix:
+  pnpmPackages prettier tsx
+Switch now? Nix then provides them. [Y/n]: Flake: $WORK/ck/overlays/jane
+engine override: $WORK/ck (the checkout around the overlay)
+Building and switching...
+Fetching the flake's inputs as you...
+Switch complete!
+  brew uninstall ripgrep jq
+  npm rm -g prettier typescript
+  cargo uninstall ripgrep-all
+  pip uninstall --yes httpie black
+Remove 7 copies outside Nix? Nix provides them now. [Y/n]: 

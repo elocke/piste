@@ -1,0 +1,1 @@
+adopt doesn't support NixOS hosts yet: add the packages to your host's piste.packages.extraPackages by hand

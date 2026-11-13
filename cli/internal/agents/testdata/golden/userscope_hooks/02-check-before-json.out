@@ -1,0 +1,50 @@
+[
+  {
+    "state": "missing",
+    "kind": "hooks",
+    "target": "claude:piste-harness@piste-local",
+    "detail": "run `piste agents sync --user`"
+  },
+  {
+    "state": "conflict",
+    "kind": "hooks",
+    "target": "claude:safety-hooks@cctools-plugins",
+    "detail": "replaced by piste-harness@piste-local; `claude plugin uninstall safety-hooks@cctools-plugins`"
+  },
+  {
+    "state": "conflict",
+    "kind": "hooks",
+    "target": "claude:PreToolUse",
+    "detail": "/home/u/.claude/hooks/rtk-rewrite.sh (replaced by piste-harness@piste-local; remove from ~/.claude/settings.json)"
+  },
+  {
+    "state": "foreign",
+    "kind": "hooks",
+    "target": "claude:Stop",
+    "detail": "node \"/home/u/.hindsight/coding-agents/dist/claude-stop-hook.js\" — ünïcode"
+  },
+  {
+    "state": "missing",
+    "kind": "hooks",
+    "target": "codex:PreToolUse[Bash]",
+    "detail": "\"$HOME/.local/share/piste-agents/hooks/bin/piste-guard\""
+  },
+  {
+    "state": "missing",
+    "kind": "hooks",
+    "target": "codex:PreToolUse[Bash]",
+    "detail": "\"$HOME/.local/share/piste-agents/hooks/bin/rtk-rewrite\""
+  },
+  {
+    "state": "untrusted",
+    "kind": "hooks",
+    "target": "codex:userPromptSubmit",
+    "detail": "node \"/home/u/.hindsight/coding-agents/dist/codex-hook.js\" (untrusted: review in codex /hooks)"
+  },
+  {
+    "state": "untrusted",
+    "kind": "hooks",
+    "target": "codex:preToolUse",
+    "detail": "if [ -n \"$PASEO_TERMINAL_ID\" ]; then \"${PASEO_HOOK_CLI:-paseo}\" hooks codex PreToolUse; fi (untrusted: review in codex /hooks)"
+  }
+]

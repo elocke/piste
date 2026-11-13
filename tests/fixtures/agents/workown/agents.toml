@@ -1,0 +1,13 @@
+# An overlay root's own third-party items beside the work zone's (a team
+# layer's): [policy] extends = true adds allow entries to the zone's policy,
+# whose deny-unlisted still holds.
+[policy]
+extends = true
+allow   = ["github:example/own"]
+
+[[claude.marketplace]]
+name   = "own"
+source = "github:example/own"
+
+[[claude.plugin]]
+id = "mine@own"

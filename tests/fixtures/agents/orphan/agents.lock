@@ -1,0 +1,7 @@
+version = 1
+
+[[skill]]
+name    = "nobody"
+source  = "github:example/nobody"
+commit  = "1111111111111111111111111111111111111111"
+narHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="

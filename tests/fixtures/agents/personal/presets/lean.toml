@@ -1,0 +1,6 @@
+# A claude-profile preset: a settings layer, not a host preset.
+kind    = "claude-profile"
+targets = ["claude"]
+plugins = ["tool@market"]
+skills  = ["alpha"]
+off     = ["synced-extra"]

@@ -1,0 +1,9 @@
+Hostname 'testhost' doesn't match any nixosConfigurations.
+  Declared: otherhost
+
+  To build another host's config without activating it:
+      piste build --host <name>
+  To force activation on this hostname (dangerous — only if you
+  really mean to activate a different host's config here):
+      piste switch --host <name>
+  Add this machine: piste host add

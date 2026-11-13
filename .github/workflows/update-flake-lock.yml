@@ -1,0 +1,94 @@
+name: update-flake-lock
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write # dispatch the required checks (below)
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - id: lock
+        uses: DeterminateSystems/update-flake-lock@da03c0f078bc4b2c37ee4f7e072d34bf8f188bb3 # v29
+        with:
+          pr-title: "chore(deps): update flake.lock"
+          pr-labels: |
+            dependencies
+            automated
+      # The bump moves nixpkgs, whose option types and renderer word
+      # docs/options.md: when they change, the bump would fail its own
+      # "docs/options.md is current" check and wait for a hand. Rebuild the
+      # page on the PR branch before the checks run. A failed rebuild still
+      # lets them run, so the PR shows that check's reason.
+      - name: Rebuild docs/options.md on the PR branch
+        if: steps.lock.outputs.pull-request-number != ''
+        continue-on-error: true
+        env:
+          BRANCH: update_flake_lock_action
+        run: |
+          set -euo pipefail
+          git fetch -q origin "$BRANCH"
+          git checkout -q -B "$BRANCH" "origin/$BRANCH"
+          page=$(nix build --no-link --print-out-paths .#docs-options)
+          install -m 644 "$page" docs/options.md
+          if git diff --quiet docs/options.md; then
+            echo "docs/options.md: the bump doesn't change it."
+            exit 0
+          fi
+          git add docs/options.md
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "docs: rebuild docs/options.md for the lock bump"
+          git push -q origin "HEAD:$BRANCH"
+      # The bump is a patch release: cut it on the PR branch, so
+      # the checks dispatched below run on the commit that merges, and
+      # piste-release.yml tags it once lock-review.yml merges it. A refusal
+      # (exit 3: Upgrading notes under Unreleased, or no release yet) leaves
+      # the bump unreleased: it ships with the next minor. The tool is built,
+      # not `go run`: go run turns exit 3 into 1.
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        if: steps.lock.outputs.pull-request-number != ''
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Cut a patch release on the PR branch
+        if: steps.lock.outputs.pull-request-number != ''
+        env:
+          BRANCH: update_flake_lock_action
+        run: |
+          set -euo pipefail
+          git fetch -q origin "$BRANCH"
+          git checkout -q -B "$BRANCH" "origin/$BRANCH"
+          (cd cli && go build -buildvcs=false -o "$RUNNER_TEMP/changelog" ./cmd/changelog)
+          rc=0
+          version=$("$RUNNER_TEMP/changelog" cut patch --note "Inputs updated (flake.lock).") || rc=$?
+          if [ "$rc" = 3 ]; then
+            echo "No patch release: the bump merges unreleased and ships with the next minor."
+            exit 0
+          fi
+          [ "$rc" = 0 ] || exit "$rc"
+          git add CHANGELOG.md
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "chore(release): $version"
+          git push -q origin "HEAD:$BRANCH"
+      # A PR opened with GITHUB_TOKEN starts no workflows, so main's required
+      # checks would never report and branch protection would block the merge
+      # for ever. Dispatch them on the PR branch; the check runs land on its
+      # head commit. lock-review.yml then merges it if they go green.
+      - name: Run the required checks on the PR branch
+        if: steps.lock.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: update_flake_lock_action
+        run: |
+          gh workflow run piste.yml --ref "$BRANCH"
+          gh workflow run agents.yml --ref "$BRANCH"

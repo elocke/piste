@@ -1,0 +1,96 @@
+name: piste
+
+on:
+  pull_request:
+  # update-flake-lock dispatches this onto its PR branch (a PR opened with
+  # GITHUB_TOKEN starts no workflows, so the required check would never report).
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # The Go piste: format, vet, unit tests and the end-to-end harness
+  # (cli/e2e, against goldens in testdata/golden).
+  go:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      # Every file with ported rulesync logic is listed in the notices.
+      - name: check-notices
+        run: tools/check-notices
+      - run: go test ./...
+
+  # The shipped derivation: buildGoModule (static) and its wrapper, with no
+  # tests (a user's build doesn't run them); checks.piste runs them in the Nix
+  # sandbox.
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: checks.piste (the Go tests in the sandbox)
+        run: nix build -L --no-link .#checks.x86_64-linux.piste
+      - run: nix build .#piste -L
+      # The starter overlay (what `piste init` writes for fixed answers;
+      # TestRenderInstances keeps it equal) built on this engine, reusing the
+      # piste above. --no-link: ./result stays piste for the smoke step.
+      - name: template (x86_64-linux home-manager)
+        run: >-
+          nix build -L --no-link --no-write-lock-file --override-input piste "$PWD"
+          './tests/fixtures/template/linux#homeConfigurations."jane@devbox".activationPackage'
+      # The same for a NixOS host: a whole system, built to its toplevel.
+      - name: template (x86_64-linux NixOS)
+        run: >-
+          nix build -L --no-link --no-write-lock-file --override-input piste "$PWD"
+          './tests/fixtures/template/nixos#nixosConfigurations.devbox.config.system.build.toplevel'
+      # flake check runs with --no-build: docs/options.md is diffed here.
+      - name: docs/options.md is current
+        run: nix build -L --no-link .#checks.x86_64-linux.docs-options
+      - name: docs site builds and its links resolve
+        run: nix build -L --no-link .#checks.x86_64-linux.docs-site .#checks.x86_64-linux.docs-site-stage .#checks.x86_64-linux.docs-site-stage-missing
+      # What `piste check` runs. Lazy trees on: an eval-time read through an
+      # interpolated "${store}/f" fails here with "path … is not valid".
+      - name: flake check (no build, lazy trees)
+        run: nix flake check --no-build --option lazy-trees true
+      - name: smoke
+        run: |
+          ./result/bin/piste --version
+          ./result/bin/piste --help | grep -q switch
+          ./result/bin/piste remote list
+      # What is published: the tree git archive exports (paths .gitattributes marks
+      # export-ignore are dropped). No private addresses, home paths or secrets
+      # in it.
+      - name: leaks (the published tree)
+        run: |
+          mkdir "$RUNNER_TEMP/tree"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/tree"
+          ./result/bin/piste leaks "$RUNNER_TEMP/tree"
+
+  # The starter overlay as a Mac (aarch64-darwin), and checks.piste: the Go
+  # tests and the end-to-end harness on macOS, which a user's build no longer runs.
+  # Runs only on a public repository (macOS minutes).
+  template-darwin:
+    if: ${{ !github.event.repository.private }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: checks.piste (the Go tests on macOS)
+        run: nix build -L --no-link .#checks.aarch64-darwin.piste
+      - name: template (aarch64-darwin)
+        run: >-
+          nix build -L --no-link --no-write-lock-file --override-input piste "$PWD"
+          './tests/fixtures/template/darwin#darwinConfigurations.jane-mac.system'

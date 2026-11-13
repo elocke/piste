@@ -1,0 +1,3 @@
+# The `agent` fixture zone: any zone name works.
+targets = ["claude", "codex"]
+skills = ["beta2"]

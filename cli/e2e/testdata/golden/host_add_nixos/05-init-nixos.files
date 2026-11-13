@@ -1,0 +1,4 @@
+./default.nix
+./machine/channels.nix
+./machine/configuration.nix
+./machine/users.nix

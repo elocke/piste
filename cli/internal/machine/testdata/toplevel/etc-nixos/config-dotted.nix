@@ -1,0 +1,3 @@
+{
+  config.networking.hostName = "example";
+}

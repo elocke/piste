@@ -1,0 +1,5 @@
+Flake: $WORK/flake
+engine override: none (flake has no piste input)
+Building...
+this machine has both nixosConfigurations.testhost and homeConfigurations."tester@testhost"; using the NixOS one
+Build complete. To apply: piste switch

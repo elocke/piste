@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# List rulesync commits since the ported snapshot (v22.0.0, 81b97709) that
+# touch the upstream paths in THIRD_PARTY_NOTICES.md, so a human can decide
+# whether to port a fix. Never a build or runtime input.
+#
+# Usage: cli/tools/upstream-watch [--since YYYY-MM-DD]
+# Needs gh (authenticated) or GH_TOKEN; read-only GitHub API calls.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+repo=dyoshikawa/rulesync
+base=81b9770933f37dc379072f1aed7b204082d99208
+since=""
+[ "${1:-}" = "--since" ] && since="$2"
+if [ -z "$since" ]; then
+  since=$(gh api "repos/$repo/commits/$base" --jq .commit.committer.date)
+fi
+paths=$(sed -n '/<!-- ported-files:begin -->/,/<!-- ported-files:end -->/p' THIRD_PARTY_NOTICES.md \
+  | awk -F'|' 'NR>2 {print $3}' | grep -oE '`src/[^`]+`' | tr -d '`' | sort -u)
+echo "rulesync commits since $since touching ported paths:"
+found=0
+while read -r p; do
+  [ -z "$p" ] && continue
+  out=$(gh api "repos/$repo/commits?path=$p&since=$since&per_page=100" \
+    --jq '.[] | "\(.sha[0:8]) \(.commit.committer.date[0:10]) \(.commit.message | split("\n")[0])"' || true)
+  [ -n "$out" ] || continue
+  found=1
+  echo; echo "== $p"; echo "$out"
+done <<<"$paths"
+[ $found -eq 1 ] || echo "(none)"

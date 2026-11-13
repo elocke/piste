@@ -1,0 +1,203 @@
+# switch and rollback on a NixOS machine whose overlay has its NixOS host:
+# the flake's inputs fetched as the user, then sudo nixos-rebuild switch
+# (root has no git credentials for a private input); the hostname guard; sudo
+# nixos-rebuild switch --rollback; and the undo after a new login shell fails
+# the check: nix-env --switch-generation on the system profile, then the old
+# system's switch-to-configuration, both through sudo.
+#
+# First, 00: a machine that isn't NixOS (no marker yet) refuses to switch
+# to a NixOS host named by --host, before fetching or sudo.
+#
+# Until 04-undo the system profile has no generation (a first switch: no
+# check) and sudo is the shared shim (it runs nothing). 04-undo has
+# generations in $WORK/gens/<n>, generation 41 active and 42 broken (the
+# login shell exits 127 in it), and fakebins in $WORK/fake, ahead of the
+# shims, that move the profile as the real tools do. Outputs are frozen in
+# $GOLDEN/nixos_switch.
+#
+# Every NixOS switch first evaluates the new system's lock-out facts
+# (preflight.nix, from replies/nix-eval-preflight) and reads the running
+# root (findmnt, a by-label link to $WORK/dev/vda1 in the facts): until 05
+# they pass. 05: over SSH, a config with no key for the user and a sudo
+# password they don't have (sudo -n -k succeeds today) is refused before
+# any sudo nixos-rebuild. 06: the same with --force switches, unchecked.
+# 07: an eval of the new system that fails is a refusal too, naming nix's
+# error. 08: rollback when the overlay's NixOS names can't be evaluated:
+# refused with nix's error and the command that rolls the system back by
+# hand.
+[!linux] skip 'a NixOS machine is Linux'
+
+chmod 0755 scenario.sh
+exec chmod 0755 bin/nix bin/login-sh fake/sudo fake/nixos-rebuild fake/nix-env gen/switch-to-configuration
+exec git init -q -b master flake
+exec git -C flake add flake.nix flake.lock
+exec git -C flake -c user.email=t@t -c user.name=t commit -q -m 'initial commit'
+env USER=tester
+env SHELL=$WORK/bin/login-sh
+env PATH=$WORK/bin${:}$PATH
+
+exec sh scenario.sh
+exec sh normalize.sh
+grep '^1$' out/00-switch-not-nixos.rc
+grep '\Aserver is a NixOS host and this machine doesn.t run NixOS: switching to it here would replace this system\. Build it instead: piste build --host server\n\z' out/00-switch-not-nixos.err
+! grep 'sudo|nixos-rebuild|archive' out/00-switch-not-nixos.calls
+grep 'o\.nixosConfigurations or' out/00-switch-not-nixos.calls
+# Not vacuous: the shims were really reached. The flake's inputs are
+# fetched as the user before root switches (Review Focus 5).
+grep '(?s)\Anix eval --json \S+/flake#\. --apply o: builtins\.attrNames \(o\.nixosConfigurations or \{ \}\) --no-write-lock-file\n.*\nnix flake archive --json \S+/flake\nnix eval --json \S+/flake#nixosConfigurations\."testhost"\.config --apply \(preflight\.nix\) "tester" --no-write-lock-file\nfindmnt -no SOURCE /\nsudo nixos-rebuild switch --flake \S+/flake#testhost\n\z' out/01-switch.calls
+grep '^Switch complete!$' out/01-switch.out
+grep '^1$' out/02-switch-guard.rc
+grep '^Hostname .testhost. doesn.t match any nixosConfigurations\.$' out/02-switch-guard.err
+grep '^  Add this machine: piste host add$' out/02-switch-guard.err
+! grep 'nixos-rebuild|archive' out/02-switch-guard.calls
+grep '^sudo nixos-rebuild switch --rollback$' out/03-rollback.calls
+grep '^Rollback complete!$' out/03-rollback.out
+grep '(?s)sudo nixos-rebuild switch --flake \S+/flake#testhost\n.*\nsudo nix-env --profile \S+/\.machine/profiles/system --switch-generation 41\nnix-env .*\nsudo \S+/gens/41/bin/switch-to-configuration switch\nswitch-to-configuration\(gen 41\) switch\n\z' out/04-undo.calls
+grep 'Undone: generation 41 is active again\. 42 stays in the store\.' out/04-undo.out
+grep 'system-41-link$' out/04-undo.profile
+! grep 'rollback' out/04-undo.calls
+# 05: refused, each rule's line between the header and the footer, before
+# the baseline check and any sudo nixos-rebuild.
+grep '^1$' out/05-preflight-refused.rc
+grep '\Apiste switch: refusing, the new configuration would lock you out:\n  you.re connected over SSH and the new config gives tester no SSH keys: add users\.users\.tester\.openssh\.authorizedKeys\.keys to your host\n  sudo needs no password today, and the new config would ask for one tester doesn.t have: set security\.sudo\.wheelNeedsPassword = false or give the user a password \(if you do have one, run piste switch --force\)\nFix it, or run piste switch --force to switch anyway\.\n\z' out/05-preflight-refused.err
+grep '^sudo -n -k true$' out/05-preflight-refused.calls
+! grep 'nixos-rebuild|getent' out/05-preflight-refused.calls
+# 06: --force evaluates nothing of the new system and switches.
+grep '^0$' out/06-force.rc
+grep '^sudo nixos-rebuild switch --flake \S+/flake#testhost$' out/06-force.calls
+! grep '\.config |findmnt|sudo -n' out/06-force.calls
+grep '^Switch complete!$' out/06-force.out
+grep '^1$' out/07-preflight-eval-fails.rc
+grep '\Apiste switch: can.t evaluate the new system to check it: error: example eval failure\nTo switch without the check: piste switch --force\n' out/07-preflight-eval-fails.err
+! grep 'nixos-rebuild|sudo' out/07-preflight-eval-fails.calls
+grep '^1$' out/08-rollback-eval-fails.rc
+grep '\Acan.t read nixosConfigurations from \S+/flake: error: example names failure\nTo roll back the system by hand: sudo nixos-rebuild switch --rollback\n\z' out/08-rollback-eval-fails.err
+! grep 'sudo|nixos-rebuild' out/08-rollback-eval-fails.calls
+cmpworkdir $WORK/out $GOLDEN/nixos_switch
+
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out" "$WORK/replies"
+# The running root, and the new config's by its label.
+mkdir -p "$WORK/dev/disk/by-label"
+: > "$WORK/dev/vda1"
+ln -s ../../vda1 "$WORK/dev/disk/by-label/nixos"
+echo "$WORK/dev/vda1" > "$WORK/replies/findmnt"
+facts() {
+  printf '{"SSHEnabled":true,"PasswordAuth":false,"KbdInteractive":false,"KeysInHomedir":true,"Keys":%s,"KeyFiles":0,"Wheel":true,"SudoEnabled":true,"WheelNeedsPassword":true,"NopasswdForUser":false,"HasPassword":%s,"BootLoader":true,"IsContainer":false,"RootDevice":"%s"}' \
+    "$1" "$2" "$WORK/dev/disk/by-label/nixos" > "$WORK/replies/nix-eval-preflight"
+}
+facts 1 true
+cd "$WORK/flake"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+# Not NixOS yet: --host naming one of the overlay's NixOS hosts is refused.
+printf '["server"]' > "$WORK/replies/nix-eval"
+run 00-switch-not-nixos switch --host server
+# A NixOS machine whose system profile has no generation yet.
+mkdir -p "$WORK/.machine/profiles" && touch "$WORK/.machine/NIXOS"
+printf '["testhost"]' > "$WORK/replies/nix-eval"
+run 01-switch switch
+# The overlay's NixOS hosts don't include this machine, and it has no home
+# there either: the guard refuses before anything is fetched or built.
+printf '["otherhost"]' > "$WORK/replies/nix-eval"
+run 02-switch-guard switch
+printf '["testhost"]' > "$WORK/replies/nix-eval"
+run 03-rollback rollback
+# Generation 41 active, 42 (the switch's) broken.
+for n in 41 42; do
+  mkdir -p "$WORK/gens/$n/bin"
+  cp "$WORK/gen/switch-to-configuration" "$WORK/gens/$n/bin/switch-to-configuration"
+done
+: > "$WORK/gens/42/broken"
+sh "$WORK/setgen.sh" "$WORK/.machine/profiles/system" 41
+(PATH=$WORK/fake:$PATH; export PATH; run 04-undo switch)
+readlink "$WORK/.machine/profiles/system" > "$out/04-undo.profile"
+# Over SSH, the new config has no key for tester and no password, while
+# sudo needs none today: refused. With --force, switched.
+facts 0 false
+(SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22'; export SSH_CONNECTION; run 05-preflight-refused switch)
+(SSH_CONNECTION='192.0.2.1 50000 192.0.2.2 22'; export SSH_CONNECTION; run 06-force switch --force)
+: > "$WORK/replies/nix-eval-preflight-fails"
+run 07-preflight-eval-fails switch
+: > "$WORK/replies/nix-eval-names-fails"
+run 08-rollback-eval-fails rollback
+exit 0
+-- normalize.sh --
+# The check's time.
+cd $WORK/out
+sed -E 's/ after [0-9]+\.[0-9]s\./ after N.Ns./' 04-undo.err > 04-undo.err.t && mv 04-undo.err.t 04-undo.err
+# The preflight's eval applies preflight.nix, inlined: keep the user it gets.
+for f in *.calls; do
+  sed -E 's/--apply \(user: config: .*\) "tester"/--apply (preflight.nix) "tester"/' "$f" > "$f.t" && mv "$f.t" "$f"
+done
+-- bin/nix --
+#!/bin/sh
+# nix: the preflight's facts of the new system from
+# replies/nix-eval-preflight (an error once replies/nix-eval-preflight-fails
+# exists), the configuration names from replies/nix-eval (the NixOS ones an
+# error once replies/nix-eval-names-fails exists); the rest goes to the
+# shared shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+case "$*" in
+*'".config '*)
+  if [ -e "$WORK/replies/nix-eval-preflight-fails" ]; then
+    echo 'error: example eval failure' >&2; exit 1
+  fi
+  cat "$WORK/replies/nix-eval-preflight" ;;
+*'(o.nixosConfigurations or { })'*)
+  if [ -e "$WORK/replies/nix-eval-names-fails" ]; then
+    echo 'error: example names failure' >&2; exit 1
+  fi
+  cat "$WORK/replies/nix-eval" ;;
+*) cat "$WORK/replies/nix-eval" ;;
+esac
+-- bin/login-sh --
+#!/bin/sh
+# A login shell, with only sh builtins (the check's PATH is sshd's
+# default): it can't run piste when the active system generation is broken.
+root=${0%/bin/login-sh}
+if [ -e "$root/.machine/profiles/system/broken" ]; then
+  echo "zsh: command not found: piste" >&2
+  exit 127
+fi
+echo "piste version test"
+-- fake/sudo --
+#!/bin/sh
+{ printf 'sudo'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+exec "$@"
+-- fake/nixos-rebuild --
+#!/bin/sh
+# nixos-rebuild switch: point the system profile at the next generation,
+# as it does before activating.
+{ printf 'nixos-rebuild'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+p=$WORK/.machine/profiles/system
+cur=$(readlink "$p"); cur=${cur%-link}; cur=${cur##*-}
+sh "$WORK/setgen.sh" "$p" $((cur + 1))
+-- fake/nix-env --
+#!/bin/sh
+# nix-env --profile P --switch-generation N
+{ printf 'nix-env'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+if [ "$1" = --profile ] && [ "$3" = --switch-generation ]; then
+  sh "$WORK/setgen.sh" "$2" "$4"
+fi
+-- gen/switch-to-configuration --
+#!/bin/sh
+g=${0%/bin/switch-to-configuration}
+echo "switch-to-configuration(gen ${g##*/}) $*" >> "$WORK/calls"
+-- setgen.sh --
+# setgen.sh <profile> <n>: point <profile> at generation <n>, as nix-env does.
+p=$1 n=$2
+mkdir -p "$(dirname "$p")"
+ln -sfn "$WORK/gens/$n" "$p-$n-link"
+ln -sfn "$(basename "$p")-$n-link" "$p"
+-- flake/flake.nix --
+{ outputs = { self }: { nixosConfigurations = { }; homeConfigurations = { }; }; }
+-- flake/flake.lock --
+{"nodes": {"root": {"inputs": {"nixpkgs": "nixpkgs"}}, "nixpkgs": {"locked": {"lastModified": 4102444800}}}, "root": "root", "version": 7}

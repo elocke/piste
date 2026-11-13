@@ -1,0 +1,34 @@
+# `piste remote move`: argument errors never reach ssh; a dry run never
+# contacts the box.
+
+env CLAUDE_CONFIG_DIR=$WORK/claude
+
+# exactly one of ids or --all-blocked
+! exec piste remote move pb
+stderr '(?i)give job/session ids or --all-blocked'
+! stdout python
+! exec piste remote move pb --all-blocked abcd1234
+stderr '(?i)not both'
+! exec piste remote move pb '../etc'
+stderr '(?i)is not a job or session id'
+! exists $WORK/calls
+
+# nothing blocked: a dry run moves nothing and says so
+mkdir $WORK/claude/jobs/done0000
+cp done.json $WORK/claude/jobs/done0000/state.json
+exec piste remote move pb --all-blocked --dry-run
+stdout '0 moved, 0 not moved \(dry run\)'
+! stdout python
+
+# an expired job: skipped, non-zero, still no ssh
+mkdir $WORK/claude/jobs/dead0000
+cp dead.json $WORK/claude/jobs/dead0000/state.json
+! exec piste remote move pb dead0000
+stdout 'skip   dead0000 \(old\): no transcript for session gone \(expired\?\)'
+stdout '0 moved, 1 not moved'
+! exists $WORK/calls
+
+-- done.json --
+{"state":"done","sessionId":"x"}
+-- dead.json --
+{"state":"blocked","name":"old","sessionId":"gone"}

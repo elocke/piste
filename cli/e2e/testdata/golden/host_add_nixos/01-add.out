@@ -1,0 +1,14 @@
+Roles from overlays/mine's other NixOS host (othermachine): dev; --role sets others
+Added testhost (roles: dev) to overlays/mine: hosts/testhost/ and its entry in flake.nix, staged
+This machine's /etc/nixos is in hosts/testhost/machine/
+Needs you (marked "# piste:" in the files):
+  channels.nix:6: the flake build doesn't use channels
+  configuration.nix:20: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+  configuration.nix:24: system.autoUpgrade would rebuild from /etc/nixos, not this overlay
+/etc/nixos stays on this machine; piste switch builds this overlay, and a plain nixos-rebuild switch doesn't.
+1 SSH key from ~/.ssh/authorized_keys may log in as jane (hosts/testhost/default.nix)
+Flake: $WORK/ck/overlays/mine (checkout $WORK/ck: overlay mine (--overlay))
+engine override: $WORK/ck (the checkout around the overlay)
+Building...
+Build complete. To apply: piste switch
+  To keep it: git -C $WORK/ck/overlays/mine commit -m 'Add testhost' -- flake.nix hosts/testhost && git -C $WORK/ck/overlays/mine push

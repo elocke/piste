@@ -1,0 +1,11 @@
+Target flake: $WORK/h/piste/overlays/personal
+Checking if 'wget' is available in nixpkgs...
+'wget' is available in nixpkgs!
+
+Recommendation: Add to nix packages instead of homebrew brews.
+This ensures the package works on both macOS and Linux.
+
+  cli  - shell tools, utilities
+  dev  - development tools, languages
+
+Add to the cli list in $WORK/h/piste/overlays/personal/modules/packages-module.nix

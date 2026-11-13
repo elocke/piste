@@ -1,0 +1,7 @@
+Roles from overlays/bare's other NixOS hosts (box, othermachine), the ones they share: dev; --role sets others
+    hosts."gone" = {
+      system = "x86_64-linux";
+      nixos = true;
+      roles = [ "dev" ];
+      modules = [ ./hosts/gone ];
+    };

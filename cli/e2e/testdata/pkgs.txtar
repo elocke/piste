@@ -1,0 +1,188 @@
+# piste pkgs: what is out of date, grouped by who updates it. Read-only. git
+# is real (a file:// remote with release tags), nix and brew are shimmed.
+env USER=jane
+exec sh mkremote.sh
+exec sh mkreplies.sh
+cd $WORK/home/piste/overlays/mine
+# The tools shimmed; a fake piste-pnpm on PATH.
+mkdir $WORK/fakebin
+cp $WORK/piste-pnpm $WORK/fakebin/piste-pnpm
+chmod 0755 $WORK/fakebin/piste-pnpm
+env PATH=$WORK/fakebin:$PATH
+# nix flake prefetch answers a directory that is no layer.
+exec sh -c 'printf "{\"storePath\":\"%s/notlayer\"}\n" "$WORK" > "$WORK/replies/nix-flake-prefetch"'
+mkdir $WORK/notlayer
+
+exec piste pkgs
+cmpwork stdout $GOLDEN/pkgs/main.txt
+stdout 'Yours \(piste pkgs update moves these\)'
+stdout 'The engine \(moves with piste releases\)'
+stdout 'Layer layer \(in this overlay: \./layer\)'
+stdout 'v0\.1\.0'
+stdout 'v0\.1\.1'
+stdout 'worktrunk'
+stdout 'nixpkgs-fresh +2026-03-01 +fresh: gh'
+! stdout 'home-manager +2026-01-20 +fresh'
+stdout 'tsx +4\.0\.0 → 4\.19\.0'
+stdout 'tools +2026-01-05'
+! stdout 'nixpkgs  '
+stdout 'home-manager +2026-01-20'
+! stdout 'Homebrew'
+! stderr .
+
+# Read-only: no flake update, no pnpm add.
+! grep 'nix flake update' $WORK/calls
+! grep 'pnpm add' $WORK/calls
+! grep 'brew' $WORK/calls
+
+# Only a flake built on the engine is looked at as a layer: nothing else is
+# downloaded.
+grep -count=1 'nix flake prefetch' $WORK/calls
+grep 'nix flake prefetch --json github:example/team/ggg' $WORK/calls
+! grep 'worktrunk|nixpkgs-fresh|home-manager' $WORK/calls
+
+# piste-pnpm outdated fails (pnpm missing, or no JSON from it): a warning
+# with its reason, never "up to date"; the rest still prints, exit 0.
+cp $WORK/piste-pnpm-broken $WORK/fakebin/piste-pnpm
+chmod 0755 $WORK/fakebin/piste-pnpm
+exec piste pkgs
+stdout 'pnpm globals: piste-pnpm outdated failed: pnpm isn.t on PATH'
+! stdout 'pnpm globals: up to date'
+stdout 'The engine \(moves with piste releases\)'
+
+# No pnpm globals declared: said so, exit 0.
+rm $WORK/fakebin/piste-pnpm
+exec piste pkgs
+cmpwork stdout $GOLDEN/pkgs/no-pnpm.txt
+stdout 'pnpm globals: none declared \(piste.packages.pnpm in home.nix\)'
+! stdout 'tsx'
+
+# A checkout on a branch, one commit behind origin, and an overlay pinned to
+# a branch.
+exec git -C $WORK/home/piste checkout -q -B main origin/main
+exec git -C $WORK/home/piste reset -q --hard v0.1.0
+exec sed -i 's|github:example/piste/v0.1.0|github:example/piste/main|' flake.nix
+exec piste pkgs
+cmpwork stdout $GOLDEN/pkgs/branch.txt
+stdout 'the branch main, 1 commit behind origin'
+stdout 'engine pin is a branch or another ref'
+exec git -C $WORK/home/piste -c advice.detachedHead=false checkout -q v0.1.0
+exec sed -i 's|github:example/piste/main|github:example/piste/v0.1.0|' flake.nix
+
+# origin unreachable: the offline line, the rest still prints.
+exec git -C $WORK/home/piste remote set-url origin file://$WORK/nope.git
+exec piste pkgs
+cmpwork stdout $GOLDEN/pkgs/offline.txt
+stdout 'couldn.t reach origin: showing what this checkout has'
+stdout 'Yours \(piste pkgs update moves these\)'
+stdout 'worktrunk'
+stdout 'v0\.1\.0'
+
+# Takes no arguments.
+! exec piste pkgs now
+stderr 'Unknown command "now"'
+
+-- piste-pnpm --
+#!/bin/sh
+[ "$1" = outdated ] && printf 'tsx\t4.0.0\t4.19.0\n'
+-- piste-pnpm-broken --
+#!/bin/sh
+echo "piste-pnpm: pnpm isn't on PATH" >&2
+exit 1
+-- mkreplies.sh --
+mkdir -p "$WORK/replies"
+-- mkremote.sh --
+set -e
+c() { git add -A && git -c user.name=t -c user.email=t@example.com commit -q -m "$1" && git tag "$1"; }
+mkdir -p src && cd src
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+cp "$WORK/engine.flake.lock" flake.lock
+git init -q -b main
+c v0.1.0
+echo 2 > VERSION && c v0.1.1
+cd ..
+mkdir -p remote && git clone -q --bare src remote/piste.git
+git -c advice.detachedHead=false clone -q --branch v0.1.0 remote/piste.git home/piste
+o=home/piste/overlays/mine
+mkdir -p $o/layer
+cp "$WORK/mine.flake.nix" $o/flake.nix
+cp "$WORK/mine.flake.lock" $o/flake.lock
+cp "$WORK/piste-layer.toml" $o/layer/piste-layer.toml
+-- engine.flake.lock --
+{
+  "nodes": {
+    "root": { "inputs": { "nixpkgs": "nixpkgs" } },
+    "nixpkgs": {
+      "locked": { "type": "github", "owner": "nixos", "repo": "nixpkgs", "rev": "bbb", "lastModified": 1768000000 }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
+-- mine.flake.nix --
+{
+  inputs = {
+    piste.url = "github:example/piste/v0.1.0";
+    nixpkgs.follows = "piste/nixpkgs";
+    worktrunk.url = "github:example/worktrunk";
+    layer.url = "path:./layer";
+    team.url = "github:example/team";
+    nixpkgs-fresh.url = "github:nixos/nixpkgs/nixos-unstable";
+  };
+  outputs = inputs@{ piste, self, ... }: piste.lib.mkFlake {
+    inherit inputs self;
+    user = "jane";
+    zone = "personal";
+    hosts = { };
+    fresh = [ "gh" ];
+  };
+}
+-- piste-layer.toml --
+zone = "work"
+-- mine.flake.lock --
+{
+  "nodes": {
+    "root": {
+      "inputs": {
+        "piste": "piste",
+        "nixpkgs": ["piste", "nixpkgs"],
+        "worktrunk": "worktrunk",
+        "layer": "layer",
+        "team": "team",
+        "nixpkgs-fresh": "nixpkgs-fresh",
+        "home-manager": "home-manager"
+      }
+    },
+    "piste": {
+      "inputs": { "nixpkgs": "nixpkgs" },
+      "locked": { "type": "github", "owner": "example", "repo": "piste", "rev": "aaa", "lastModified": 1767225600 }
+    },
+    "nixpkgs": {
+      "locked": { "type": "github", "owner": "nixos", "repo": "nixpkgs", "rev": "bbb", "lastModified": 1768000000 }
+    },
+    "home-manager": {
+      "locked": { "type": "github", "owner": "nix-community", "repo": "home-manager", "rev": "fff", "lastModified": 1768867200 }
+    },
+    "worktrunk": {
+      "locked": { "type": "github", "owner": "example", "repo": "worktrunk", "rev": "ccc", "lastModified": 1770000000 }
+    },
+    "layer": {
+      "inputs": { "tools": "tools", "nixpkgs": ["nixpkgs"] },
+      "locked": { "type": "path", "path": "./layer", "lastModified": 1771000000 }
+    },
+    "team": {
+      "inputs": { "piste": "piste" },
+      "locked": { "type": "github", "owner": "example", "repo": "team", "rev": "ggg", "lastModified": 1769000000 }
+    },
+    "tools": {
+      "locked": { "type": "github", "owner": "example", "repo": "tools", "rev": "ddd", "lastModified": 1767571200 }
+    },
+    "nixpkgs-fresh": {
+      "locked": { "type": "github", "owner": "nixos", "repo": "nixpkgs", "rev": "eee", "lastModified": 1772323200 }
+    }
+  },
+  "root": "root",
+  "version": 7
+}

@@ -1,0 +1,2 @@
+piste switch: can't evaluate the new system to check it: error: example eval failure
+To switch without the check: piste switch --force

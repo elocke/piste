@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "zone": "agent",
+  "generator": "fixture",
+  "roots": [
+    {
+      "name": "piste-agents",
+      "zone": "shared"
+    },
+    {
+      "name": "agent",
+      "zone": "agent"
+    }
+  ],
+  "items": [
+    {
+      "id": "shared:skill/alpha",
+      "kind": "skill",
+      "zone": "shared",
+      "name": "alpha",
+      "trust": "first-party",
+      "root": "piste-agents",
+      "path": "skills/web/alpha",
+      "content": "content/shared/skill/alpha"
+    },
+    {
+      "id": "agent:skill/beta2",
+      "kind": "skill",
+      "zone": "agent",
+      "name": "beta2",
+      "trust": "first-party",
+      "root": "agent",
+      "path": "skills/bot/beta2",
+      "content": "content/agent/skill/beta2"
+    },
+    {
+      "id": "personal:skill/x",
+      "kind": "skill",
+      "zone": "personal",
+      "name": "x",
+      "trust": "first-party",
+      "root": "agent",
+      "path": "skills/x",
+      "content": "content/personal/skill/x"
+    }
+  ]
+}

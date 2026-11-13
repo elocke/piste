@@ -1,0 +1,61 @@
+name: go-vendor-hash
+
+# Renovate bumps cli/go.mod and cli/go.sum but can't run Nix, so the
+# buildGoModule vendorHash in cli/default.nix goes stale and the PR fails
+# checks.piste for ever. ci/go-vendor-hash.sh recomputes it; this pushes the
+# result onto Renovate's branch. renovate.json's gitIgnoredAuthors lists the
+# bot, so Renovate still treats the branch as its own and keeps rebasing it
+# (each rebase runs this again).
+#
+# Only Renovate's branches in this repository: a person's PR fixes its own
+# hash, and a fork's branch can't be pushed to.
+
+on:
+  pull_request:
+    paths: [cli/go.mod, cli/go.sum]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-vendor-hash-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  vendor-hash:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # push the hash onto the PR branch
+      actions: write # dispatch the required checks (below)
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: Recompute vendorHash
+        run: ci/go-vendor-hash.sh
+      # A push made with GITHUB_TOKEN starts no workflows, so the new head would
+      # never get main's required checks: dispatch them onto the branch, as
+      # update-flake-lock.yml does. A plain push: a Renovate rebase that landed
+      # meanwhile wins (the push is refused), and starts this again.
+      - name: Push it, and run the required checks on the new head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          if git diff --quiet cli/default.nix; then
+            echo "vendorHash is current; nothing to push."
+            exit 0
+          fi
+          git add cli/default.nix
+          git -c user.name='github-actions[bot]' \
+            -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+            commit -q -m "fix(cli): update vendorHash for the go.mod bump"
+          git push -q origin "HEAD:$BRANCH"
+          gh workflow run piste.yml --ref "$BRANCH"
+          gh workflow run agents.yml --ref "$BRANCH"

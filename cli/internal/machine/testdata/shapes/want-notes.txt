@@ -1,0 +1,13 @@
+configuration.nix:22: <nixpkgs> is a channel lookup, which the flake build can't resolve
+configuration.nix:27: ./data.json isn't carried over (only .nix files are)
+configuration.nix:29: ./files isn't carried over (only .nix files are)
+lambda.nix:4: modulesPath is used here but is not an argument of this file; add it to the file's arguments
+letin.nix:10: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+letrec.nix:12: the host's name is its key in flake.nix (mkFlake sets networking.hostName)
+nix-settings.nix:7: the flake build doesn't use channels
+nix-settings.nix:11: the flake build doesn't use channels
+nix-settings.nix:13: system.autoUpgrade would rebuild from /etc/nixos, not this overlay
+sameline.nix:7: <home-manager/nixos> is a channel lookup, which the flake build can't resolve
+sameline.nix:7: /home/user/extra.nix is outside /etc/nixos, so it isn't carried over
+sub/dir.nix:15: ../../escape.nix is outside /etc/nixos, so it isn't carried over
+with-attrs.nix:8: the host's name is its key in flake.nix (mkFlake sets networking.hostName)

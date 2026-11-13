@@ -1,0 +1,15 @@
+skill blocked: https://github.com/evil/x.git HEAD -> 777777777777; prefetching
+skill stale: https://github.com/o/skills.git HEAD -> 666666666666; prefetching
+skill unlocked: https://github.com/o/skills.git HEAD -> 666666666666; prefetching
++ skill blocked
+~ skill stale: path: skills/stale -> skills/moved; narHash: sha256-STALE -> sha256-FAKEHASH0000000000000000000000000000000000= (https://github.com/o/skills/compare/666666666666...666666666666)
++ skill unlocked
++ claude.marketplace new
++ claude.plugin elsewhere@new
++ claude.plugin missing@good
++ claude.plugin off@good
++ codex.plugin canva@openai-curated
++ codex.plugin figma@openai-curated
++ tool rtk
++ tool weird
+wrote agents/agents.lock (base: base/agents.base.toml)

@@ -1,0 +1,18 @@
+{
+  "transcript": "t.jsonl",
+  "agents": 2,
+  "agent_chars": 17,
+  "skills": 3,
+  "skill_chars": 41,
+  "name_only": 1,
+  "deferred_tools": 2,
+  "deferred_chars": 9,
+  "mcp_instr_chars": 37,
+  "instructions_chars": 33,
+  "sessionstart_hook_chars": 13,
+  "userprompt_hook_chars_first": 8,
+  "start_chars_total": 150,
+  "start_tokens_est": 38,
+  "threshold": 10,
+  "over": true
+}

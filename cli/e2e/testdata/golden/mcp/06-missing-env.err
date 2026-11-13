@@ -1,0 +1,1 @@
+Error: environment variable(s) not set: GW_TOKEN. These come from sops via the piste secrets module — run `piste switch`, then start a fresh login shell.

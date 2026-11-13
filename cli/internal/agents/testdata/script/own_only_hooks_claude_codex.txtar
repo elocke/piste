@@ -1,0 +1,61 @@
+# own_only_hooks_claude_codex: the 9 foreign hooks survive
+# sync + remove in .claude/settings.json and .codex/hooks.json.
+
+mkdir proj/.git
+cd proj
+cp .claude/settings.json claude.orig
+cp .codex/hooks.json codex.orig
+
+exec piste agents add shared:hook/guard $RS
+grep 'hindsight session-start' .claude/settings.json
+grep 'paseo hook tool' .claude/settings.json
+grep '// user settings with foreign hooks' .claude/settings.json
+grep 'CLAUDE_PROJECT_DIR.*guard\.sh' .claude/settings.json
+grep 'rtk hook codex' .codex/hooks.json
+grep 'guard\.sh' .codex/hooks.json
+
+exec piste agents sync $RS
+stdout 'up to date'
+
+exec piste agents remove shared:hook/guard $RS
+cmp .claude/settings.json claude.orig
+cmp .codex/hooks.json codex.orig
+! exists .agents/hooks/guard.sh
+
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]
+-- proj/.claude/settings.json --
+{
+  // user settings with foreign hooks (Hindsight, paseo, rtk)
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "hindsight session-start" }] },
+      { "hooks": [{ "type": "command", "command": "paseo hook start" }] },
+      { "hooks": [{ "type": "command", "command": "echo hi" }] }
+    ],
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "hindsight prompt" }] },
+      { "hooks": [{ "type": "command", "command": "paseo hook prompt" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "hindsight stop" }] },
+      { "hooks": [{ "type": "command", "command": "paseo hook stop" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": ".claude/hooks/rtk-rewrite.sh" }] },
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "paseo hook tool" }] }
+    ]
+  }
+}
+-- proj/.codex/hooks.json --
+{
+  "hooks": {
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "hindsight session-start" }] }
+    ],
+    "PreToolUse": [
+      { "matcher": "Bash", "hooks": [{ "type": "command", "command": "rtk hook codex" }] }
+    ]
+  }
+}

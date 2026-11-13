@@ -1,0 +1,334 @@
+# piste host add and init on a NixOS machine: the NIXOS marker, its
+# /etc/nixos at $WORK/.machine/etc-nixos (the machine package's image
+# fixture, configuration.nix and users.nix as they are there, plus a
+# channels.nix that can't be carried whole, so a note shows), and a key in
+# ~/.ssh/authorized_keys.
+#
+# 01: host add names the NixOS host by the hostname, carries /etc/nixos
+# into hosts/testhost/machine/ (its networking.hostName commented out: the
+# name is flake.nix's; and its system.autoUpgrade, which would rebuild from
+# /etc/nixos) and the key into hosts/testhost/default.nix,
+# stages them with its entry (nixos = true;), takes the roles of the
+# overlay's other NixOS host and builds the system; the name is the
+# running hostname, so no sudo hostname. 02: a dotted --name is refused,
+# nothing written, and so is --name nixos. 03: this machine called nixos (a fresh NixOS's name), no
+# --name and no terminal: refused with the message, nothing written. 04:
+# --name box writes hosts/box/ and, once it builds and the switch would
+# name it box, sets the running hostname (sudo hostname box, through the
+# shim). 05: init --nixos in an empty checkout
+# carries the same. 06: no configuration.nix in /etc/nixos: the template's
+# machine file stays, and that is said. 07: 01's again: already there,
+# nothing carried or changed, the same commit line. 08: init without
+# --nixos on NixOS asks NixOS or a home (Enter: NixOS), and --host box
+# sets the running hostname, for now: with --no-build, nothing says the
+# switch keeps it. After each build host add and init evaluate the
+# host's networking.hostName (replies: the host's name, else
+# $HOSTNAME_EVAL): 09, a Proxmox container's module forcing it to "", and
+# 10, an image's leaving it "", each warn with the setting that keeps the
+# name (never a mkForce, which clashes with a Proxmox image's own). 11-14:
+# the name is already one of the overlay's NixOS hosts, whose
+# root (the preflight's facts eval: $ROOT_DEVICE, else a by-uuid link to
+# this machine's root, $WORK/dev/vda1 by findmnt) says whose: 11, another
+# disk, refused with no --name and 12 with one, nothing written, each with
+# what to change if this is that machine reinstalled (this machine's root
+# by its uuid link, the name judgeRoot knows it by); 13, a root
+# by label (every machine from one image has it), refused without --name,
+# and 14 taken with --name. (07, 09 and 10 are this machine's: the same
+# disk.) 15: --name box again, on a Proxmox VM whose cloud-init names it:
+# the hostname is box for now, and the warning, with the VM's name or
+# cloud-init off, follows. 16: the hosts eval after adding gone's entry
+# doesn't list it ($HOSTS_EVAL): everything host add wrote is undone, the
+# carried machine/ too, and the overlay is as clean as before. Outputs are
+# frozen in $GOLDEN/host_add_nixos.
+[!linux] skip 'a NixOS machine is Linux'
+
+env USER=jane
+exec sh mkck.sh ck
+exec sh mkck.sh ck2
+chmod 0755 bin/nix
+env PATH=$WORK/bin${:}$PATH
+
+# The overlays, made on another machine (this one, before it ran NixOS),
+# each for its NixOS host othermachine, committed.
+cd ck
+exec piste init mine --no-build --nixos --system x86_64-linux --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste init other --no-build --nixos --system x86_64-linux --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+exec piste init bare --no-build --nixos --system x86_64-linux --engine github:example/piste/v0 --user jane --host othermachine --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+grep 'nixos = true;' overlays/mine/flake.nix
+exists overlays/mine/hosts/othermachine/machine/configuration.nix
+exec sh $WORK/commit.sh mine other bare
+# Not NixOS yet: --name is refused (a home or a Mac is named by the
+# hostname), before any eval.
+! exec piste host add --overlay mine --name box
+stderr '^--name is for a NixOS machine: a Mac or a home-manager home is named by this machine.s hostname$'
+! exists $WORK/calls
+cd $WORK
+
+exec sh scenario.sh
+# Not vacuous: the shims were really reached.
+grep '^0$' out/01-add.rc
+grep '^Roles from overlays/mine.s other NixOS host \(othermachine\): dev; --role sets others$' out/01-add.out
+grep '^nix eval .*overlays/mine#\. --apply .*home-manager\.users\."jane"\.piste\.roles.*nixosConfigurations' out/01-add.calls
+grep '^Added testhost \(roles: dev\) to overlays/mine: hosts/testhost/ and its entry in flake.nix, staged$' out/01-add.out
+grep '^Needs you \(marked "# piste:" in the files\):$' out/01-add.out
+# A nightly upgrade from /etc/nixos would put the old system back: off.
+grep '^  configuration\.nix:[0-9]+: system\.autoUpgrade would rebuild from /etc/nixos, not this overlay$' out/01-add.out
+grep '^  # system\.autoUpgrade\.enable = true;$' out/01-add.machine-configuration.nix
+grep '(?m)^  \S+\.nix:[0-9]+: .*\n/etc/nixos stays on this machine; piste switch builds this overlay, and a plain nixos-rebuild switch doesn.t\.$' out/01-add.out
+grep '^  channels\.nix:[0-9]+: the flake build doesn.t use channels$' out/01-add.out
+# The carried hostname isn't live: the host's name is its key in flake.nix.
+grep '^  configuration\.nix:[0-9]+: the host.s name is its key in flake\.nix \(mkFlake sets networking\.hostName\)$' out/01-add.out
+grep '^  # networking\.hostName = "example";$' out/01-add.machine-configuration.nix
+! grep '^ *networking\.hostName' out/01-add.machine-configuration.nix
+grep 'nixos = true;' out/01-add.entry
+grep 'authorizedKeys\.keys = \[ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyOnlyForTests jane@example\.com" \];' out/01-add.default.nix
+grep '^nix build .*overlays/mine#nixosConfigurations\."testhost"\.config\.system\.build\.toplevel( |$)' out/01-add.calls
+! grep '^sudo' out/01-add.calls
+grep 'commit -m .Add testhost. -- flake\.nix hosts/testhost && git' out/01-add.out
+grep '^1$' out/02-dotted.rc
+grep '\Aa NixOS hostname can.t contain dots \(--name\)\n\z' out/02-dotted.err
+! grep . out/02-dotted.status
+grep '\A"nixos" is NixOS.s default hostname: give the machine its own name \(--name\)\n\z' out/02-named-nixos.err
+grep '^1$' out/03-generic-name.rc
+grep '\A"nixos" is NixOS.s default hostname: give this machine its own name with --name\n\z' out/03-generic-name.err
+! grep . out/03-generic-name.status
+grep '^0$' out/04-named.rc
+grep '^Setting this machine.s hostname to box for now; the switch makes it permanent\.$' out/04-named.out
+grep '(?s)^Build complete\..*\nSetting this machine.s hostname to box for now; the switch makes it permanent\.\n' out/04-named.out
+grep '(?s)^nix build .*overlays/other#nixosConfigurations\."box"\.config\.system\.build\.toplevel( |$).*\nnix eval [^\n]*nixosConfigurations\."box"\.config [^\n]*c\.networking\.hostName[^\n]*\nsudo hostname box\n' out/04-named.calls
+grep '^0$' out/05-init-nixos.rc
+grep '^nix build .*overlays/mine#nixosConfigurations\."testhost"\.config\.system\.build\.toplevel( |$)' out/05-init-nixos.calls
+! grep '^sudo' out/05-init-nixos.calls
+cmp out/05-init-nixos.machine-configuration.nix out/01-add.machine-configuration.nix
+grep '^0$' out/06-no-configuration.rc
+grep '^No /etc/nixos/configuration\.nix here: hosts/box/machine/configuration\.nix is the template.s VM; check its boot loader and root filesystem before switching\.$' out/06-no-configuration.out
+cmp out/06-no-configuration.machine-configuration.nix $WORK/ck/overlays/bare/hosts/othermachine/machine/configuration.nix
+grep '^overlays/mine already has testhost$' out/07-again.out
+grep 'commit -m .Add testhost. -- flake\.nix hosts/testhost && git' out/07-again.out
+cmp out/07-again.staged out/01-add.staged
+! grep 'roles' out/07-again.calls
+grep '^0$' out/08-init-offered.rc
+grep '^A NixOS host \(the whole system, from this machine.s /etc/nixos\) or a home \(home-manager only\)\? nixos/home \[nixos\]: $' out/08-init-offered.out
+grep '^Setting this machine.s hostname to box for now\.$' out/08-init-offered.out
+! grep 'the switch makes it permanent' out/08-init-offered.out
+grep '^sudo hostname box$' out/08-init-offered.calls
+grep 'nixos = true;' out/08-init-offered.entry
+# The name sticks: the hostname eval ran, as builds evaluate, and said nothing.
+grep '^nix eval --json \S+/overlays/mine#nixosConfigurations\."testhost"\.config --override-input piste git\+file://\S+/ck --apply c: \{ hostName = c\.networking\.hostName; .* --no-write-lock-file$' out/01-add.calls
+grep 'nixosConfigurations\."testhost"\.config .*c\.networking\.hostName' out/05-init-nixos.calls
+! grep 'won.t name this machine' out/01-add.out
+! grep 'won.t name this machine' out/05-init-nixos.out
+! grep 'won.t name this machine' out/07-again.out
+grep '^0$' out/09-hostname-lxc.rc
+grep '^The switch won.t name this machine testhost: its networking\.hostName is "" \(a module the host imports leaves the name to Proxmox, cloud-init or DHCP\), and piste finds this machine.s host by its hostname\.$' out/09-hostname-lxc.out
+grep '^  To keep testhost: set proxmoxLXC\.manageHostName = true; in hosts/testhost/default\.nix, or name the container testhost in Proxmox\.$' out/09-hostname-lxc.out
+grep '^  To keep testhost: set networking\.hostName = lib\.mkOverride 49 "testhost"; in hosts/testhost/default\.nix \(lib among its arguments\)\.$' out/10-hostname-image.out
+! grep mkForce out/10-hostname-image.out
+grep '^overlays/mine already has testhost$' out/07-again.out
+grep '(?s)nix eval --json \S+/overlays/mine#nixosConfigurations\."testhost"\.config --override-input piste git\+file://\S+/ck --apply \(user: config: .*\) "jane" --no-write-lock-file\nfindmnt -no SOURCE /\n' out/07-again.calls
+grep '^1$' out/11-name-taken.rc
+grep '\Atesthost is already another machine.s host in this overlay \(its root is \S+/dev/vdb1, this machine.s is \S+/dev/vda1\): give this machine its own name with --name\n  If this is testhost reinstalled, update fileSystems in hosts/testhost/ to this machine.s root \(\S+/dev/disk/by-uuid/aaaa\) instead\.\n\z' out/11-name-taken.err
+! grep '^(sudo|nix build)' out/11-name-taken.calls
+cmp out/11-name-taken.staged out/07-again.staged
+grep '^1$' out/12-name-taken-named.rc
+grep '\Aothermachine is already another machine.s host in this overlay \(its root is \S+/dev/vdb1, this machine.s is \S+/dev/vda1\): give this machine its own name with --name\n  If this is othermachine reinstalled, update fileSystems in hosts/othermachine/ to this machine.s root \(\S+/dev/disk/by-uuid/aaaa\) instead\.\n\z' out/12-name-taken-named.err
+! grep '^(sudo|nix build)' out/12-name-taken-named.calls
+grep '^1$' out/13-name-unknown.rc
+grep '\Atesthost is already a host in this overlay, and piste can.t tell whether it is this machine \(its root, \S+/dev/disk/by-label/nixos, is a label every machine made from one image has\): if it is, run piste host add --name testhost; else give this machine its own name with --name\n\z' out/13-name-unknown.err
+! grep '^(sudo|nix build)' out/13-name-unknown.calls
+grep '^0$' out/14-name-unknown-named.rc
+grep '^overlays/mine already has testhost$' out/14-name-unknown-named.out
+grep '^0$' out/15-named-cloud-init.rc
+grep '(?m)^Build complete\. .*\nSetting this machine.s hostname to box for now\.\nThe switch won.t name this machine box: its networking\.hostName is "" \(.*\), and piste finds this machine.s host by its hostname\.\n  To keep box: name the VM box in Proxmox \(cloud-init sets the hostname from it\), or set proxmox\.cloudInit\.enable = false; in hosts/box/default\.nix \(cloud-init then configures no network: only for a VM that gets its address by DHCP\)\.$' out/15-named-cloud-init.out
+! grep 'mkForce|the switch makes it permanent' out/15-named-cloud-init.out
+grep '(?s)\nnix eval [^\n]*c\.networking\.hostName[^\n]*proxmox\.cloudInit\.enable or false[^\n]*\nsudo hostname box\n' out/15-named-cloud-init.calls
+grep '^1$' out/16-undo.rc
+grep '\Anix eval of overlays/bare doesn.t list gone after adding its entry \(its hosts aren.t a set piste can add to\): flake\.nix is back as it was and hosts/gone removed\. Add the entry to its hosts by hand:\n\z' out/16-undo.err
+grep 'hosts\."gone" = \{' out/16-undo.out
+! grep . out/16-undo.status
+! exists $WORK/ck/overlays/bare/hosts/gone
+exists $WORK/ck/overlays/bare/hosts/box/default.nix
+! grep '^(sudo|nix build)' out/16-undo.calls
+cmpworkdir $WORK/out $GOLDEN/host_add_nixos
+
+-- scenario.sh --
+out=$WORK/out
+rm -rf "$out"; mkdir -p "$out"
+# This machine runs NixOS now: the marker, its /etc/nixos, its SSH keys.
+mkdir -p "$WORK/.machine/etc-nixos" && touch "$WORK/.machine/NIXOS"
+cp "$WORK"/etc-nixos/*.nix "$WORK/.machine/etc-nixos/"
+mkdir -p "$HOME/.ssh" && cp "$WORK/authorized_keys" "$HOME/.ssh/authorized_keys"
+# Its disks: the root, vda1 (findmnt's answer), with a by-uuid and a
+# by-label link to it, and another, vdb1.
+mkdir -p "$WORK/dev/disk/by-uuid" "$WORK/dev/disk/by-label" "$WORK/replies"
+touch "$WORK/dev/vda1" "$WORK/dev/vdb1"
+ln -s "$WORK/dev/vda1" "$WORK/dev/disk/by-uuid/aaaa"
+ln -s "$WORK/dev/vda1" "$WORK/dev/disk/by-label/nixos"
+echo "$WORK/dev/vda1" > "$WORK/replies/findmnt"
+run() {
+  step=$1; shift
+  : > "$WORK/calls"
+  piste "$@" >"$out/$step.out" 2>"$out/$step.err"
+  echo $? > "$out/$step.rc"
+  cp "$WORK/calls" "$out/$step.calls"
+}
+# wrote <step> <overlay dir> <host>: the host's files, its file, its entry
+# in flake.nix and what is staged.
+wrote() {
+  h=$2/hosts/$3
+  (cd "$h" && find . -type f | LC_ALL=C sort) > "$out/$1.files"
+  cp "$h/default.nix" "$out/$1.default.nix"
+  cp "$h/machine/configuration.nix" "$out/$1.machine-configuration.nix"
+  sed -n "/hosts\.\"$3\" = {/,/^      };/p" "$2/flake.nix" > "$out/$1.entry"
+  git -C "$2" diff --cached --name-only > "$out/$1.staged"
+}
+cd "$WORK/ck"
+run 01-add host add --overlay mine
+wrote 01-add overlays/mine testhost
+cp overlays/mine/hosts/testhost/machine/users.nix "$out/01-add.machine-users.nix"
+cp overlays/mine/hosts/testhost/machine/channels.nix "$out/01-add.machine-channels.nix"
+run 02-dotted host add --overlay other --name a.b
+git -C overlays/other status --porcelain > "$out/02-dotted.status"
+run 02-named-nixos host add --overlay other --name nixos
+# A fresh NixOS machine's hostname.
+echo nixos > "$WORK/.machine/hostname"
+run 03-generic-name host add --overlay other
+git -C overlays/other status --porcelain > "$out/03-generic-name.status"
+run 04-named host add --overlay other --name box
+wrote 04-named overlays/other box
+rm "$WORK/.machine/hostname"
+cd "$WORK/ck2"
+run 05-init-nixos init mine --nixos --engine github:example/piste/v0 --user jane --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+wrote 05-init-nixos overlays/mine testhost
+# No configuration.nix in /etc/nixos.
+rm "$WORK/.machine/etc-nixos/configuration.nix"
+cd "$WORK/ck"
+run 06-no-configuration host add --overlay bare --name box
+wrote 06-no-configuration overlays/bare box
+run 07-again host add --overlay mine
+git -C overlays/mine diff --cached --name-only > "$out/07-again.staged"
+# init, NixOS not asked for by flag: offered, and taken.
+cp "$WORK/etc-nixos/configuration.nix" "$WORK/.machine/etc-nixos/"
+cd "$WORK/ck2"
+run 08-init-offered init offered --no-build --host box --engine github:example/piste/v0 --user jane --zone personal --git-name 'Jane Doe' --git-email jane@example.com
+wrote 08-init-offered overlays/offered box
+# Hosts whose networking.hostName the switch wouldn't make testhost.
+cd "$WORK/ck"
+HOSTNAME_EVAL='{"hostName": "", "proxmoxLXC": true}' run 09-hostname-lxc host add --overlay mine
+HOSTNAME_EVAL='{"hostName": "", "proxmoxLXC": false}' run 10-hostname-image host add --overlay mine
+# The name is already the overlay's: another disk's, then a label's.
+ROOT_DEVICE=$WORK/dev/vdb1 run 11-name-taken host add --overlay mine
+git -C overlays/mine diff --cached --name-only > "$out/11-name-taken.staged"
+ROOT_DEVICE=$WORK/dev/vdb1 run 12-name-taken-named host add --overlay other --name othermachine
+ROOT_DEVICE=$WORK/dev/disk/by-label/nixos run 13-name-unknown host add --overlay mine
+ROOT_DEVICE=$WORK/dev/disk/by-label/nixos run 14-name-unknown-named host add --overlay mine --name testhost
+# A Proxmox VM's cloud-init names it.
+HOSTNAME_EVAL='{"hostName": "", "proxmoxLXC": false, "proxmoxCloudInit": true}' run 15-named-cloud-init host add --overlay other --name box
+# The hosts eval after adding doesn't list the new host: undone.
+sh "$WORK/commit.sh" bare
+HOSTS_EVAL='{"darwin": [], "home": [], "nixos": ["othermachine", "box"]}' run 16-undo host add --overlay bare --name gone
+git -C overlays/bare status --porcelain > "$out/16-undo.status"
+exit 0
+-- bin/nix --
+#!/bin/sh
+# nix, answering the hosts eval, the roles eval and the NixOS names eval
+# from the flake's own hosts."…" entries (nixos = true; marks a NixOS host,
+# roles = [ … ]; its roles; modules = ends it); the rest goes to the shared
+# shim.
+[ "$1" = eval ] || exec "$WORK/.shims/nix" "$@"
+{ printf 'nix'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
+# The host's networking.hostName: its name, else $HOSTNAME_EVAL. Its
+# preflight facts: its root is $ROOT_DEVICE, else this machine's by uuid.
+case "$*" in
+*'c.networking.hostName'*)
+  if [ -n "$HOSTNAME_EVAL" ]; then echo "$HOSTNAME_EVAL"; exit 0; fi
+  n=$(printf '%s\n' "$*" | sed -n 's/.*nixosConfigurations\."\([^"]*\)"\.config.*/\1/p')
+  echo "{\"hostName\": \"$n\", \"proxmoxLXC\": false}"; exit 0 ;;
+*'(user: config:'*)
+  echo "{\"SSHEnabled\": true, \"Wheel\": true, \"SudoEnabled\": true, \"BootLoader\": true, \"RootDevice\": \"${ROOT_DEVICE:-$WORK/dev/disk/by-uuid/aaaa}\"}"; exit 0 ;;
+esac
+for a in "$@"; do case "$a" in *'#.') f="${a%#.}/flake.nix" ;; esac; done
+case "$*" in
+*piste.roles*nixosConfigurations*) mode=roles-nixos ;;
+*piste.roles*darwinConfigurations*) mode=roles-darwin ;;
+*piste.roles*) mode=roles-home ;;
+*'darwin = builtins.attrNames'*) mode=hosts ;;
+*'(o.nixosConfigurations or { })'*) mode=names ;;
+*) mode=hosts ;;
+esac
+# $HOSTS_EVAL: the hosts eval's answer, whatever flake.nix says.
+if [ "$mode" = hosts ] && [ -n "$HOSTS_EVAL" ]; then echo "$HOSTS_EVAL"; exit 0; fi
+exec awk -v mode="$mode" '
+  function add(k, s) { list[k] = list[k] (list[k] == "" ? "" : ", ") s }
+  /^ *hosts\."[^"]*" = \{/ { n = $0; sub(/^ *hosts\."/, "", n); sub(/".*/, "", n); nx = 0; r = "" }
+  n != "" && /^ *nixos = true;/ { nx = 1 }
+  n != "" && /^ *roles = \[/ { r = $0; sub(/^ *roles = \[ */, "", r); sub(/ *\].*/, "", r); gsub(/" "/, "\", \"", r) }
+  n != "" && /^ *modules = / {
+    k = nx ? "nixos" : (index(n, "@") ? "home" : "darwin")
+    add(k, "\"" n "\""); add("roles-" k, "\"" n "\": [" r "]"); n = ""
+  }
+  END {
+    if (mode == "names") print "[" list["nixos"] "]"
+    else if (mode ~ /^roles-/) print "{\"roles\": {" list[mode] "}}"
+    else print "{\"darwin\": [" list["darwin"] "], \"home\": [" list["home"] "], \"nixos\": [" list["nixos"] "]}"
+  }' "$f"
+-- mkck.sh --
+# mkck.sh <dir>: an empty piste checkout, the engine's template in it.
+set -e
+mkdir -p "$1"
+cd "$1"
+touch .piste
+printf '{ outputs = _: { }; }\n' > flake.nix
+printf 'overlays/\n' > .gitignore
+mkdir templates && cp -r "$TEMPLATE" templates/default && chmod -R u+w templates
+git init -q -b main && git add -A && git -c user.name=t -c user.email=t@t commit -q -m init
+-- commit.sh --
+# commit.sh <overlay>...: each overlay's files committed.
+set -e
+for o in "$@"; do git -C "overlays/$o" add -A && git -C "overlays/$o" -c user.name=t -c user.email=t@t commit -q -m init; done
+-- authorized_keys --
+# The keys that may log in as jane.
+
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleKeyOnlyForTests jane@example.com
+-- etc-nixos/configuration.nix --
+{ config, pkgs, ... }:
+
+{
+  imports = [
+    <nixpkgs/nixos/modules/virtualisation/proxmox-image.nix>
+    ./users.nix
+  ];
+
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "/dev/vda";
+
+  fileSystems."/" = {
+    device = "/dev/disk/by-label/nixos";
+    fsType = "ext4";
+  };
+
+  networking.hostName = "example";
+  networking.useDHCP = true;
+
+  system.autoUpgrade.enable = true;
+
+  services.qemuGuest.enable = true;
+  services.openssh.enable = true;
+  security.sudo.wheelNeedsPassword = false;
+
+  system.stateVersion = "24.05";
+}
+-- etc-nixos/users.nix --
+{
+  imports = [ <nixpkgs/nixos/modules/profiles/headless.nix> ];
+
+  users.users.jane = {
+    isNormalUser = true;
+    extraGroups = [ "wheel" ];
+  };
+}
+-- etc-nixos/channels.nix --
+# Left from before flakes.
+{
+  nix.nixPath = [ "nixpkgs=/nix/var/nix/profiles/per-user/root/channels/nixos" ];
+}

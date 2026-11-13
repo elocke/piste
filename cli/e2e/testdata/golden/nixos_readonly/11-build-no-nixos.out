@@ -1,0 +1,4 @@
+Flake: $WORK/flake
+engine override: none (flake has no piste input)
+Building...
+Build complete. To apply: piste switch

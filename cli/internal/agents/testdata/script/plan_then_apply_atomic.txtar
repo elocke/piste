@@ -1,0 +1,21 @@
+# plan_then_apply_atomic: an error in the 3rd of 5 writes →
+# zero files changed.
+
+mkdir proj/.git
+cd proj
+cp .agents/agents.toml manifest.orig
+env PISTE_FAULT=stage:3
+! exec piste agents add shared:agent/rev shared:mcp/demo shared:instruction/never $RS
+stderr 'injected fault staging'
+! exists .claude/agents/rev.md
+! exists .codex/agents/rev.toml
+! exists .mcp.json
+! exists .codex/config.toml
+! exists AGENTS.md
+! exists CLAUDE.md
+! exists .agents/agents.lock
+cmp .agents/agents.toml manifest.orig
+notmp .
+-- proj/.agents/agents.toml --
+zone = "personal"
+harnesses = ["claude", "codex"]

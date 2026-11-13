@@ -1,0 +1,44 @@
+# zone_no_ambient: stray ZONE-P files in $HOME, cwd
+# parents, *.local.* and the environment → the work render contains no
+# ZONE-P.
+
+mkdir proj/.git
+env PISTE_AGENTS_ROOTS=personal=personal:$WORK/zones/personal
+env PISTE_AGENTS_HOME=$WORK/zones/personal
+cd proj
+exec piste agents sync $RS $RW
+! grep ZONE-P AGENTS.md
+! grep ZONE-P .agents/agents.lock
+! exists .agents/skills/beta
+! exists .claude/skills/beta
+! grep personal .agents/agents.lock
+
+# Even a personal root passed explicitly can't reach a work machine.
+! exec piste agents sync $RS $RW $RP --zone work
+stderr 'personal content; this is a work zone'
+# Without --zone, roots from two zones are refused before any render.
+! exec piste agents sync $RS $RW $RP
+stderr 'roots from zones personal, work: pass --zone'
+
+-- home/.rulesync/rules/zone.md --
+ZONE-P ambient home rule
+-- home/.agents/agents.toml --
+zone = "personal"
+[[use]]
+id = "personal:skill/beta"
+-- .agents/agents.toml --
+zone = "personal"
+[[use]]
+id = "personal:skill/beta"
+-- proj/.agents/agents.local.toml --
+[[use]]
+id = "personal:skill/beta"
+-- proj/.agents/agents.toml --
+zone = "work"
+harnesses = ["claude", "codex"]
+
+[[use]]
+id = "shared:skill/alpha"
+
+[[use]]
+id = "shared:instruction/never"

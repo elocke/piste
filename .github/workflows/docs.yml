@@ -1,0 +1,56 @@
+name: docs
+
+# Redeploys the docs site (https://elocke.github.io/piste/) by hand, built at
+# a ref: main, or a release's tag to put that release's site back. Each
+# release deploys its own, from piste-release.yml's pages job; this is for
+# the times between (a fix to the site's build, a deploy that failed). The
+# site's GitHub links point at the ref. Needs the repo's Pages source set to
+# GitHub Actions, once.
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The branch or tag to build the site at (its GitHub links point there)
+        required: true
+        default: main
+
+permissions:
+  contents: read
+
+jobs:
+  pages:
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pages: write # deploy the site
+      id-token: write # deploy-pages proves this run to Pages with it
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.ref }}
+      - uses: DeterminateSystems/nix-installer-action@3138316df39ed29be04236d7ffc686fa525866aa # v23
+      - name: The site at the ref (its GitHub links at the ref)
+        env:
+          REF: ${{ inputs.ref }}
+        # getFlake at the checked-out commit is pure (shallow=1: checkout's
+        # depth 1), and the ref goes in as docs-site-for's argument: a
+        # branch or tag name only, since it lands in a Nix string.
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            '' | *[!A-Za-z0-9._/-]*) echo "docs: not a branch or tag name: $REF" >&2; exit 1 ;;
+          esac
+          nix build -L --expr "(builtins.getFlake \"git+file://$PWD?rev=$(git rev-parse HEAD)&shallow=1\").legacyPackages.x86_64-linux.docs-site-for \"$REF\""
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: result/
+      - id: deploy
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

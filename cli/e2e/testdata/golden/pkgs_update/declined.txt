@@ -1,0 +1,20 @@
+Fetching piste's releases...
+You're on v0.1.0. Newest: v0.1.1.
+✓ piste: v0.1.0 → v0.1.1
+✓ overlays/mine: engine v0.1.0 → v0.1.1
+╭──────────────────────╮
+│ overlays/mine inputs │
+╰──────────────────────╯
+Input      Before      After       Jump  Status
+nixpkgs    2026-01-09  2026-01-09  -     unchanged
+piste      2026-01-01  2026-01-01  -     unchanged
+worktrunk  2026-02-02  2026-02-02  -     unchanged
+overlays/other's engine is on v0.1.0: piste update moves it
+Flake: $WORK/home/piste/overlays/mine
+engine override: $WORK/home/piste (the checkout around the overlay)
+Building, with the version changes against the current generation...
+Version changes:
+[U.]  gh  2.60.0 -> 2.62.0
+Switch now? [y/N]: 
+Not switched: nothing on this machine changed. To apply: piste switch
+Commit overlays/mine's flake.nix and flake.lock once it works.
