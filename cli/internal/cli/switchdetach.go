@@ -165,8 +165,12 @@ func (a *App) detachSwitch(caller, host string, noUndo, force bool) error {
 	}
 	defer r.Close()
 	var copied int64
+	// The unit's piste writes the log's header and footer too: not for the
+	// terminal.
+	out := &recordFilter{w: a.Stdout}
+	defer out.flush()
 	follow := func() {
-		n, _ := io.Copy(a.Stdout, r)
+		n, _ := io.Copy(out, r)
 		copied += n
 	}
 	tick := time.NewTicker(100 * time.Millisecond)

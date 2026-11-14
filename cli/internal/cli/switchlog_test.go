@@ -131,3 +131,18 @@ func TestEndRecordCodes(t *testing.T) {
 		}
 	}
 }
+
+// A detached switch's follower shows the unit's output without the log's
+// header and footer, however the reads split the lines.
+func TestRecordFilter(t *testing.T) {
+	in := "# piste switch: 2026-01-01T00:00:00Z, piste 0.1.0\n# ran: piste switch\n# host: h\n# flake: /f\nBuilding...\n# not a record\nSwitch complete!\n# exit: 0\ntail"
+	var out bytes.Buffer
+	f := &recordFilter{w: &out}
+	for i := 0; i < len(in); i += 7 {
+		f.Write([]byte(in[i:min(i+7, len(in))]))
+	}
+	f.flush()
+	if want := "Building...\n# not a record\nSwitch complete!\ntail"; out.String() != want {
+		t.Fatalf("got %q, want %q", out.String(), want)
+	}
+}

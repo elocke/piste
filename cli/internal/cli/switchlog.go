@@ -9,6 +9,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -122,6 +123,40 @@ func (a *App) endRecord(err error) {
 	a.record.line("# exit: %d", code)
 	a.record.f.Close()
 	a.record = nil
+}
+
+// recordLine: a header or footer line of the switch's log.
+var recordLine = regexp.MustCompile(`^# (piste switch|ran|host|flake|exit): `)
+
+// recordFilter passes what it's given on to w a line at a time, without the
+// log's header and footer lines; flush passes on an unfinished last line.
+type recordFilter struct {
+	w   io.Writer
+	buf []byte
+}
+
+func (f *recordFilter) Write(p []byte) (int, error) {
+	f.buf = append(f.buf, p...)
+	for {
+		i := bytes.IndexByte(f.buf, '\n')
+		if i < 0 {
+			return len(p), nil
+		}
+		line := f.buf[:i+1]
+		if !recordLine.Match(line) {
+			if _, err := f.w.Write(line); err != nil {
+				return len(p), err
+			}
+		}
+		f.buf = f.buf[i+1:]
+	}
+}
+
+func (f *recordFilter) flush() {
+	if len(f.buf) > 0 && !recordLine.Match(f.buf) {
+		f.w.Write(f.buf)
+	}
+	f.buf = nil
 }
 
 // lastSwitch is what a switch's log says: its host and flake, when it ran,

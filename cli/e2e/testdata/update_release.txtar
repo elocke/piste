@@ -256,14 +256,14 @@ grep 'Switch complete!' $HOME/.local/state/piste/switch.log
 -- detach/systemd-run --
 #!/bin/sh
 # systemd-run --user --wait ... -- <argv>: argv runs as the unit would, in
-# piste-switch-1.service, its output in the StandardOutput=truncate: log;
+# piste-switch-1.service, its output in the StandardOutput=append: log;
 # then the caller is back in its own cgroup.
 [ "$1" = --version ] && { echo "systemd 255 (255.4-1)"; exit 0; }
 log=
 while [ $# -gt 0 ]; do
   case $1 in
     --) shift; break ;;
-    -p) case $2 in StandardOutput=truncate:*) log=${2#StandardOutput=truncate:} ;; esac; shift 2 ;;
+    -p) case $2 in StandardOutput=append:*) log=${2#StandardOutput=append:} ;; esac; shift 2 ;;
     -E|--unit) shift 2 ;;
     *) shift ;;
   esac

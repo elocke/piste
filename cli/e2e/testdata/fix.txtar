@@ -92,7 +92,7 @@ stdout '^To have Claude Code fix it: piste fix --host hh$'
 env SWLOG=$WORK/home/.local/state/piste/switch.log
 grep '^# piste switch: ' $SWLOG
 grep '^# ran: piste switch --host hh$' $SWLOG
-grep '^# host: hh$' $SWLOG
+grep '^# host: (jane@)?hh$' $SWLOG
 grep '^# flake: \S+/piste/overlays/o$' $SWLOG
 grep '^Error: activation broke$' $SWLOG
 grep '^Switch failed \(exit code 1\)$' $SWLOG
@@ -105,7 +105,7 @@ env SHIM_EXIT_NIX_BUILD=
 env SHIM_EXIT_DARWIN_REBUILD_BUILD=
 exec piste fix --host hh
 stdout 'hh builds, so the failure was in activation\.$'
-stderr '^The last piste switch of hh \(\S+\) failed:$'
+stderr '^The last piste switch of (jane@)?hh \(\S+\) failed:$'
 stderr '^  Error: activation broke$'
 stderr '^  Switch failed \(exit code 1\)$'
 ! stderr 'To rollback'
