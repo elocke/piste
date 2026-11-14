@@ -112,7 +112,7 @@ Keep the edit minimal, and show it before you make it.
 | `does not provide attribute 'darwinConfigurations.<host>'` or `'homeConfigurations."<user>@<host>"'`; piste's `Hostname '<x>' doesn't match any darwinConfigurations` | the overlay has no config for this machine | `piste host add` (the person runs it), or the right `--host <hostname>` |
 | `Unexpected files in /etc, aborting activation` (Mac) | files nix-darwin manages already exist | the person renames each to `<file>.before-nix-darwin` and switches again |
 | `It seems there is already an App at '/Applications/X.app'` (Mac) | the app was installed outside Homebrew | `piste.packages.casks.exclude = [ "x" ];`, or the person removes the app |
-| `piste switch` printed `The new generation fails the check: …` and undid the switch | a new login shell doesn't start, or can't find or run piste: its rc files, its `PATH`, the login shell itself | the lines under it, from the person; `piste switch --no-undo` keeps that generation to look at (the person runs it) |
+| `piste switch` printed `The new generation fails the check: …` and undid the switch | a new login shell doesn't start, or can't find or run piste: its rc files, its `PATH`, the login shell itself | the lines under it, in `switch.log` (step 1); `piste switch --no-undo` keeps that generation to look at (the person runs it) |
 
 ## 4. Check it, and hand it back
 
