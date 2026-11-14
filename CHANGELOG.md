@@ -20,6 +20,7 @@ changes in with it isn't released.
 
 ## Unreleased
 - Every `piste switch` keeps its output in `~/.local/state/piste/switch.log` (before, only a switch inside a Linux user service did), and `piste fix`, when its rebuild passes, shows that failed switch's error lines and hands them to the AI, which no longer has to ask what you saw. The switch's output now reaches the terminal through a pipe, so nix prints plain lines instead of its progress bar.
+- On a Mac with `homebrew.onActivation.cleanup` set, `piste.homebrew.trustedFormulae`, `trustedCasks` and `trustedTaps` now survive the switch: `brew bundle`'s cleanup rebuilds `~/.homebrew/trust.json` from the Brewfile alone, and the activation now puts the declared entries back after it. While the cleanup runs, only the Brewfile's own trust holds, so a third-party formula it may load (such as a tapped dependency) belongs in `homebrew.brews` by its full name.
 
 ## v0.1.0 (2026-11-13)
 The first public release. piste sets up a Mac, a Linux machine or a NixOS machine from one small repo of your own, and its `piste` command keeps every machine matching it. Start with the [README](https://github.com/elocke/piste#readme); the docs are also a site, https://elocke.github.io/piste/, which redeploys with each release. piste is provided as is, with no support.
