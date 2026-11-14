@@ -40,18 +40,22 @@ The person does all of these. You end by telling them to run `piste switch`.
   means it builds. Always run it with `PISTE_AI=none`: where your shell has a
   terminal, plain `piste fix` starts another AI.
 - **It builds, but the switch failed.** The failure was in activation, or in
-  the check after it: ask the person what they saw.
+  the check after it. Every `piste switch` keeps its whole output in
+  `$XDG_STATE_HOME/piste/switch.log` (by default
+  `~/.local/state/piste/switch.log`), the next switch overwriting it: a
+  header (`# host:`, `# flake:`), the activation's lines and piste's, and a
+  footer `# exit: <code>` (none: the switch was killed part-way). When the
+  rebuild passes, piste fix shows that log's error lines if it's this
+  host's failed switch, and the prompt has them. Read the log around them.
+  Ask the person only when there's no such log, or it's another host's or
+  a passing switch's.
 - **A NixOS switch refused before activating** (piste's lock-out check: ssh,
   sudo, boot or machine): the message usually names the option to set in the host file (the wrong-machine rule names the two roots).
   Make that edit; never suggest `--force`, which is the person's call.
 - **The switch undid itself** (`Undone: generation <n> is active again`): the
   new generation failed piste's check that a new login shell starts and runs
   piste. The reason is the `The new generation fails the check: …` line and
-  the lines under it, on the person's screen: ask them for those. Only a
-  switch run from a systemd user service (Linux, such as an agent's runner)
-  also writes them to `$XDG_STATE_HOME/piste/switch.log`, and the next such
-  switch empties it. After a switch at a terminal, over ssh or on a Mac there
-  is no such file, or it's an older switch's. `piste switch --no-undo` keeps
+  the lines under it, in `switch.log` (above). `piste switch --no-undo` keeps
   the new generation to look at; the person runs it.
 
 ## 2. Find the line

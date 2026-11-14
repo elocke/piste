@@ -39,12 +39,13 @@ type App struct {
 	Stdout, Stderr io.Writer
 	Env            Env
 	Verbose        bool
-	Overlay        string       // --overlay: the overlay of the piste checkout to act on
-	Args           []string     // the argv piste was called with (os.Args[1:])
-	movedTo        string       // the checkout piste setup moved into from elsewhere (piste())
-	execRunner     execx.Runner // tests: runs external programs; nil runs them
-	flakesOff      bool         // piste setup turned flakes on for its own run: this Nix has them off (nixConfigFlakes)
-	announced      string       // the flake and override announceFlake last printed
+	Overlay        string        // --overlay: the overlay of the piste checkout to act on
+	Args           []string      // the argv piste was called with (os.Args[1:])
+	movedTo        string        // the checkout piste setup moved into from elsewhere (piste())
+	execRunner     execx.Runner  // tests: runs external programs; nil runs them
+	flakesOff      bool          // piste setup turned flakes on for its own run: this Nix has them off (nixConfigFlakes)
+	announced      string        // the flake and override announceFlake last printed
+	record         *switchRecord // the running switch's log (switchlog.go); nil outside a switch
 }
 
 // ExitError ends the process with Code and no further message (the command

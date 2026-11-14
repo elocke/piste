@@ -218,13 +218,13 @@ func TestFixPrompt(t *testing.T) {
 	out.WriteString("error: attribute 'tmuxx' missing\n       at /nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-source/hosts/devbox.nix:20:5:\n")
 	tail := stderrTail([]byte(out.String()), 3)
 	recheck := "piste fix --overlay work --host other-mac"
-	failed := fixPrompt(false, "jane@devbox", tail, "/home/user/.local/state/piste/fix.log", argv, recheck)
+	failed := fixPrompt(false, "jane@devbox", tail, "/home/user/.local/state/piste/fix.log", argv, recheck, nil)
 	for _, s := range []string{tail, "/home/user/.local/state/piste/fix.log", shellJoin(argv), "Follow .agents/skills/piste-fix/SKILL.md", "check it with:\n\n" + recheck + "\n"} {
 		if !strings.Contains(failed, s) {
 			t.Fatalf("failed prompt lacks %q:\n%s", s, failed)
 		}
 	}
-	built := fixPrompt(true, "jane@devbox", "", "/home/user/.local/state/piste/fix.log", argv, recheck)
+	built := fixPrompt(true, "jane@devbox", "", "/home/user/.local/state/piste/fix.log", argv, recheck, nil)
 	for _, s := range []string{"it builds now", "ask the person for the error they saw", "/home/user/.local/state/piste/fix.log", ".agents/skills/piste-fix/SKILL.md", "check it with:\n\n" + recheck + "\n"} {
 		if !strings.Contains(built, s) {
 			t.Fatalf("passing prompt lacks %q:\n%s", s, built)
@@ -233,7 +233,18 @@ func TestFixPrompt(t *testing.T) {
 	if strings.Contains(built, "tmuxx") {
 		t.Fatalf("passing prompt has the error:\n%s", built)
 	}
-	for _, p := range []string{failed, built} {
+	// It builds, and the last switch's log has the failure: no asking.
+	sw := &switchFailure{Path: "/home/user/.local/state/piste/switch.log", When: "2026-01-01T00:00:00Z", Lines: []string{"Error: brew bundle failed"}}
+	fromLog := fixPrompt(true, "jane@devbox", "", "/home/user/.local/state/piste/fix.log", argv, recheck, sw)
+	for _, s := range []string{"Error: brew bundle failed", sw.Path, sw.When, ".agents/skills/piste-fix/SKILL.md", "check it with:\n\n" + recheck + "\n"} {
+		if !strings.Contains(fromLog, s) {
+			t.Fatalf("switch-log prompt lacks %q:\n%s", s, fromLog)
+		}
+	}
+	if strings.Contains(fromLog, "ask the person") {
+		t.Fatalf("switch-log prompt asks the person:\n%s", fromLog)
+	}
+	for _, p := range []string{failed, built, fromLog} {
 		if len(p) > 4096 || strings.Contains(p, "building line 100") {
 			t.Fatalf("prompt carries log text (%d bytes):\n%s", len(p), p)
 		}

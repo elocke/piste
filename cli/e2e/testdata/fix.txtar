@@ -82,8 +82,40 @@ env PISTE_AI=
 # A failed switch names it too.
 env SHIM_EXIT_HOME_MANAGER=1
 env SHIM_EXIT_SUDO=1
+cp $WORK/activate.txt $WORK/replies/home-manager-switch
+cp $WORK/activate.txt $WORK/replies/sudo-darwin-rebuild
 ! exec piste switch --host hh
 stdout '^To have Claude Code fix it: piste fix --host hh$'
+
+# It keeps its output, on every platform: the header, the activation's own
+# lines, piste's messages and its exit code.
+env SWLOG=$WORK/home/.local/state/piste/switch.log
+grep '^# piste switch: ' $SWLOG
+grep '^# ran: piste switch --host hh$' $SWLOG
+grep '^# host: hh$' $SWLOG
+grep '^# flake: \S+/piste/overlays/o$' $SWLOG
+grep '^Error: activation broke$' $SWLOG
+grep '^Switch failed \(exit code 1\)$' $SWLOG
+grep '^# exit: 1$' $SWLOG
+rm $WORK/replies/home-manager-switch $WORK/replies/sudo-darwin-rebuild
+
+# piste fix, when the same host builds, shows that switch's error lines and
+# where the log is; piste's own hints are left out.
+env SHIM_EXIT_NIX_BUILD=
+env SHIM_EXIT_DARWIN_REBUILD_BUILD=
+exec piste fix --host hh
+stdout 'hh builds, so the failure was in activation\.$'
+stderr '^The last piste switch of hh \(\S+\) failed:$'
+stderr '^  Error: activation broke$'
+stderr '^  Switch failed \(exit code 1\)$'
+! stderr 'To rollback'
+stdout '^Switch log: \S+/home/\.local/state/piste/switch\.log$'
+# Another host's build: not that switch's.
+exec piste fix
+! stderr 'The last piste switch'
+stdout 'builds, so the failure was in activation, or it.s gone\.$'
+env SHIM_EXIT_HOME_MANAGER=
+env SHIM_EXIT_SUDO=
 
 # No checkout: piste fix has nowhere to start an AI. A failed build names
 # no piste fix; piste fix says why no session starts; the no-AI line has
@@ -135,6 +167,9 @@ error:
            }
 
        Did you mean `piste.agents', `piste.roles' or `piste.programs'?
+-- activate.txt --
+activating the configuration...
+Error: activation broke
 -- mk.sh --
 set -e
 mkdir -p replies piste/overlays/o solo

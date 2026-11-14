@@ -72,7 +72,8 @@ func switchCaller() string {
 	return userServiceUnit(string(b))
 }
 
-// switchLog is where a detached switch writes, overwritten each time.
+// switchLog is where every switch keeps its output (switchlog.go), a
+// detached one too, overwritten each time.
 func switchLog(getenv func(string) string, home string) string {
 	state := getenv("XDG_STATE_HOME")
 	if state == "" {
@@ -88,7 +89,7 @@ func switchLog(getenv func(string) string, home string) string {
 // os.Args, so setup's switch detaches as a switch.
 func detachArgv(name, log, exe string, environ []string, verbose bool, overlay, host string, noUndo, force bool) []string {
 	argv := []string{"systemd-run", "--user", "--wait", "--collect", "--quiet", "--same-dir",
-		"--unit", name, "-p", "StandardOutput=truncate:" + log}
+		"--unit", name, "-p", "StandardOutput=append:" + log}
 	for _, kv := range environ {
 		if k, _, _ := strings.Cut(kv, "="); systemdEnvName.MatchString(k) {
 			argv = append(argv, "-E", k)
