@@ -465,6 +465,14 @@ interactive ` brew trust `\. Trust dependencies explicitly too — a trusted
 formula’s tapped deps are NOT covered transitively (e\.g\. krunkit’s
 libkrun-efi must be listed on its own)\.
 
+With ` homebrew.onActivation.cleanup ` set, ` brew bundle `’s cleanup
+rebuilds trust\.json from the Brewfile’s own ` trusted: true ` entries
+(fully-qualified names only), dropping these; the activation puts them
+back after ` brew bundle `\. While the cleanup runs, only the Brewfile’s
+trust holds: a formula or cask it may load (a dependency of an
+installed formula, one it uninstalls) belongs in ` homebrew.brews ` or
+` homebrew.casks ` by its full name (` user/tap/name `)\.
+
 
 
 *Type:*
