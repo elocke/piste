@@ -7,6 +7,7 @@
 - [On a Mac](start-mac.md)
 - [On Linux](start-linux.md)
 - [On NixOS (experimental)](start-nixos.md)
+- [With an AI agent](for-agents.md)
 
 # Using piste
 

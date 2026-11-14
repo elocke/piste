@@ -331,6 +331,58 @@ func TestAgentsMdUnderCap(t *testing.T) {
 	}
 }
 
+// docs/for-agents.md is what an AI agent follows to set a machine up, often
+// fetched on its own: every `piste <command> [<subcommand>]` it names in code
+// is one piste has (docs/commands.md's tree), so the agent never runs one that
+// isn't there.
+func TestForAgentsCommands(t *testing.T) {
+	root, ok := repoFile(t, "")
+	if !ok {
+		t.Skip("no docs/ here (the Nix build's source is cli/ only)")
+	}
+	md := readRepo(t, root, "docs/for-agents.md")
+	var code []string
+	inFence := false
+	for _, line := range strings.Split(md, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			continue
+		}
+		if inFence {
+			code = append(code, line)
+			continue
+		}
+		code = append(code, mdCodeRE.FindAllString(line, -1)...)
+	}
+	cmds := map[string]*cobra.Command{}
+	for _, c := range docCommands(docsRoot()) {
+		cmds[c.Name()] = c
+	}
+	named := 0
+	for _, s := range code {
+		for _, m := range forAgentsCmdRE.FindAllStringSubmatch(s, -1) {
+			named++
+			c, ok := cmds[m[1]]
+			if !ok {
+				t.Errorf("docs/for-agents.md names `piste %s`, which isn't a command (docs/commands.md)", m[1])
+				continue
+			}
+			if subs := docCommands(c); len(subs) > 0 && m[2] != "" {
+				if !slices.ContainsFunc(subs, func(sc *cobra.Command) bool { return sc.Name() == m[2] }) {
+					t.Errorf("docs/for-agents.md names `piste %s %s`: %s has no such subcommand", m[1], m[2], m[1])
+				}
+			}
+		}
+	}
+	if named < 10 {
+		t.Errorf("found only %d piste commands in docs/for-agents.md: is the pattern still right?", named)
+	}
+}
+
+// forAgentsCmdRE: piste and a command (and a word after it) in a command
+// line, not ~/piste, piste.packages or piste-fix.
+var forAgentsCmdRE = regexp.MustCompile(`(?:^|[\s(;&|` + "`" + `])piste ([a-z][a-z-]*)(?: ([a-z][a-z-]*))?`)
+
 func TestMdLinks(t *testing.T) {
 	md := "See [a](a.md) and ![img](i/x.png \"title\"), [b](b.md#part).\n" +
 		"Not `[c](c.md)`, nor\n```\n[d](d.md)\n```\n[e](https://example.com) [f](#here)\n"
