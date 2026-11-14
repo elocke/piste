@@ -223,6 +223,9 @@ func (a *App) warn(msg string)    { a.say(a.Stdout, msg, "warn") }
 func (a *App) errorf(msg string)  { a.say(a.Stderr, msg, "err") }
 
 func (a *App) say(w io.Writer, msg, kind string) {
+	if rec := a.teeing(); rec != nil {
+		fmt.Fprintln(rec, msg)
+	}
 	s := ui.For(w)
 	switch kind {
 	case "ok":
@@ -297,6 +300,11 @@ func (a *App) pass(argv []string, dir string) (int, error) {
 	c := exec.Command(argv[0], argv[1:]...)
 	c.Dir = dir
 	c.Stdin, c.Stdout, c.Stderr = os.Stdin, a.Stdout, a.Stderr
+	// During a switch, its output goes into the switch's log too
+	// (switchlog.go): through a pipe, so nix prints plain lines.
+	if rec := a.teeing(); rec != nil {
+		c.Stdout, c.Stderr = io.MultiWriter(a.Stdout, rec), io.MultiWriter(a.Stderr, rec)
+	}
 	err := c.Run()
 	var ee *exec.ExitError
 	switch {

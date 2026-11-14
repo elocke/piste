@@ -157,13 +157,14 @@ stdout 'Undone: generation 41 is active again\. 42 stays in the store\.'
 mkdir $WORK/.machine
 exec sh $WORK/reset.sh
 cp $WORK/cgroup.runner $WORK/.machine/cgroup
-! exists $HOME/.local/state/piste
+# Every switch keeps a log now: start with none, so the detached one makes it.
+rm $HOME/.local/state/piste
 exec piste switch $SW
 stdout '^This switch runs inside runner\.service, which the switch may restart\.$'
 stdout '^Running it as piste-switch-\d+\.service\. Log: ~/\.local/state/piste/switch\.log$'
 stdout '^Ctrl-C leaves it running; to stop it: systemctl --user stop piste-switch-\d+\.service$'
 stdout '(?s)Checking that a new login shell .*Switch complete!'
-grep '^systemd-run --user --wait --collect --quiet --same-dir --unit piste-switch-\d+ -p StandardOutput=truncate:\S+/home/\.local/state/piste/switch\.log( -E \S+)* -E WORK( -E \S+)* -- \S+/piste switch --host linux$' $WORK/calls
+grep '^systemd-run --user --wait --collect --quiet --same-dir --unit piste-switch-\d+ -p StandardOutput=append:\S+/home/\.local/state/piste/switch\.log( -E \S+)* -E WORK( -E \S+)* -- \S+/piste switch --host linux$' $WORK/calls
 grep '(?s)^systemd-run .*\nhome-manager switch ' $WORK/calls
 exists $HOME/.local/state/piste/switch.log
 grep 'Switch complete!' $HOME/.local/state/piste/switch.log
@@ -209,7 +210,7 @@ OLD LOG
 -- fake/systemd-run --
 #!/bin/sh
 # systemd-run --user --wait ... -- <argv>: run argv as the unit would, in
-# piste-switch-1.service, its output in the -p StandardOutput=truncate: log.
+# piste-switch-1.service, its output in the -p StandardOutput=append: log.
 { printf 'systemd-run'; for a in "$@"; do printf ' %s' "$a"; done; printf '\n'; } >> "$WORK/calls"
 if [ "$1" = --version ]; then
   echo "systemd ${RUN_VERSION:-255} (${RUN_VERSION:-255}.4-1)"
@@ -224,7 +225,7 @@ log=
 while [ $# -gt 0 ]; do
   case $1 in
     --) shift; break ;;
-    -p) case $2 in StandardOutput=truncate:*) log=${2#StandardOutput=truncate:} ;; esac; shift 2 ;;
+    -p) case $2 in StandardOutput=append:*) log=${2#StandardOutput=append:} ;; esac; shift 2 ;;
     -E|--unit) shift 2 ;;
     *) shift ;;
   esac
