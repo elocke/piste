@@ -19,6 +19,7 @@ branch is up to date with `main` when it merges: a cut that brings other
 changes in with it isn't released.
 
 ## Unreleased
+- New: [docs/for-agents.md](docs/for-agents.md), a page an AI coding agent reads to help a person set up and use piste, a copy-paste prompt for it at the top of the README, and `llms.txt` at the docs site's root.
 - Every `piste switch` keeps its output in `~/.local/state/piste/switch.log` (before, only a switch inside a Linux user service did), and `piste fix`, when its rebuild passes, shows that failed switch's error lines and hands them to the AI, which no longer has to ask what you saw. The switch's output now reaches the terminal through a pipe, so nix prints plain lines instead of its progress bar.
 - On a Mac with `homebrew.onActivation.cleanup` set, `piste.homebrew.trustedFormulae`, `trustedCasks` and `trustedTaps` now survive the switch: `brew bundle`'s cleanup rebuilds `~/.homebrew/trust.json` from the Brewfile alone, and the activation now puts the declared entries back after it. While the cleanup runs, only the Brewfile's own trust holds, so a third-party formula it may load (such as a tapped dependency) belongs in `homebrew.brews` by its full name.
 

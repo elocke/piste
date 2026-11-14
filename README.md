@@ -5,6 +5,18 @@ repo of your own, and the `piste` command keeps every machine matching it. Say
 which tools you want (a shell, git, an editor, your usual command-line
 programs) and piste installs and configures them the same way on each machine.
 
+> **Set up with your AI agent.** Paste this into Claude Code, Codex or
+> another coding agent:
+>
+> ```
+> Help me set up my machine with piste. First read
+> https://raw.githubusercontent.com/elocke/piste/stable/docs/for-agents.md
+> then walk me through it step by step. Ask me before running anything that
+> needs sudo or changes my system.
+> ```
+>
+> With a team's setup, add: `My team's setup is <repo url>.`
+
 It's for developers who want that without learning Nix. **You don't need to
 know Nix:** pick your platform's guide below, copy a few commands, and answer
 a few questions.

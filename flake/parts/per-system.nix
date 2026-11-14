@@ -130,7 +130,14 @@
         perl ../site/stage.pl ${self} src ${lib.escapeShellArg ref}
         cp ../site/SUMMARY.md src/SUMMARY.md
         cp ../site/book.toml book.toml
+        # llms.txt (llmstxt.org) goes at the site root: mdBook copies a
+        # non-.md file of src/ to the output as it is.
+        cp ../site/llms.txt src/llms.txt
         mdbook build --dest-dir "$out"
+        if ! cmp ../site/llms.txt "$out/llms.txt"; then
+          echo "docs-site: llms.txt isn't at the site root, unchanged" >&2
+          exit 1
+        fi
         # Offline: external links are not fetched; a dead page link, image or
         # anchor fails the build. 404.html is skipped: it links with the
         # site-url base ("/piste/"), which only resolves once served.

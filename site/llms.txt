@@ -1,0 +1,22 @@
+# piste
+
+> piste sets up a Mac, a Linux machine or a NixOS machine from one small git repo of your own (your overlay), and the `piste` CLI keeps every machine matching it. No Nix knowledge needed.
+
+piste is a Nix engine (nix-darwin and home-manager modules with opinions about a developer's tools) plus a Go CLI that builds, switches, updates and onboards. Setup is `nix run github:elocke/piste/stable -- setup [<overlay or team layer url>]`; it clones the engine to `~/piste` and keeps the person's settings in `~/piste/overlays/<name>/`. An AI agent helping someone should read the agent page first: the person runs anything that needs sudo or changes the machine.
+
+## Docs
+
+- [For agents](https://raw.githubusercontent.com/elocke/piste/stable/docs/for-agents.md): start here as an AI agent; setup per platform, rules, where changes go, what to do when it breaks
+- [Introduction](https://elocke.github.io/piste/index.html): what piste is and what a machine gets by default
+- [Getting started on a Mac](https://elocke.github.io/piste/start-mac.html): Apple silicon, Determinate Nix, nix-darwin
+- [Getting started on Linux](https://elocke.github.io/piste/start-linux.html): standalone home-manager, the home only
+- [Getting started on NixOS](https://elocke.github.io/piste/start-nixos.html): the whole machine (experimental)
+- [Make it yours](https://elocke.github.io/piste/make-it-yours.html): add a package or app, drop a default, a second machine, secrets
+- [Troubleshooting](https://elocke.github.io/piste/troubleshooting.html): failed builds and switches, piste fix
+- [Backing out](https://elocke.github.io/piste/backing-out.html): roll back, remove piste
+- [Concepts](https://elocke.github.io/piste/concepts.html): engine, overlay, checkout, hosts, roles, zones, layers
+- [Customising](https://elocke.github.io/piste/customising.html): the reference for every default and override
+- [Upgrading](https://elocke.github.io/piste/upgrading.html): moving to a new release
+- [Agents and MCP](https://elocke.github.io/piste/agents-and-mcp.html): skills, instructions, hooks and MCP servers
+- [Commands](https://elocke.github.io/piste/commands.html): every command and flag, generated
+- [Options](https://elocke.github.io/piste/options.html): every piste option, generated
