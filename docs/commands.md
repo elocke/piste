@@ -375,6 +375,10 @@ Rebuild what `piste switch` builds (the checkout's engine, --show-trace), withou
 activating, and keep the output in ${XDG_STATE_HOME:-~/.local/state}/piste/fix.log.
 At a terminal, then start Claude Code (else Codex) at the piste checkout with the
 error and the piste-fix skill. PISTE_AI=claude|codex picks one; PISTE_AI=none, no AI.
+
+When it builds, the failure was in activation: if the last piste switch was of the
+same host and failed, its error lines from ${XDG_STATE_HOME:-~/.local/state}/piste/switch.log
+are shown, and handed to the AI.
 ```
 
 Flags:
@@ -716,6 +720,11 @@ ${XDG_STATE_HOME:-~/.local/state}/piste/switch.log. Ctrl-C leaves it running
 systemd-run to pass your environment on by name; with an older one, run
 piste switch outside the service: from a terminal or ssh, or under
 systemd-run --user --scope.
+
+Every switch keeps its output, piste's messages and its exit code in
+${XDG_STATE_HOME:-~/.local/state}/piste/switch.log, overwritten by the next
+one: piste fix reads it when its rebuild passes. The switch's output goes
+through a pipe to the terminal and the log, so nix prints plain lines.
 
 --no-undo skips the checks and the undo. To undo a switch that passed:
 piste rollback.

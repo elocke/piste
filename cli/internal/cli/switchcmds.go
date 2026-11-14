@@ -253,6 +253,11 @@ systemd-run to pass your environment on by name; with an older one, run
 piste switch outside the service: from a terminal or ssh, or under
 systemd-run --user --scope.
 
+Every switch keeps its output, piste's messages and its exit code in
+${XDG_STATE_HOME:-~/.local/state}/piste/switch.log, overwritten by the next
+one: piste fix reads it when its rebuild passes. The switch's output goes
+through a pipe to the terminal and the log, so nix prints plain lines.
+
 --no-undo skips the checks and the undo. To undo a switch that passed:
 piste rollback.`,
 		Args: cobra.NoArgs,
@@ -322,6 +327,17 @@ func (a *App) runSwitch(host string, noUndo, force bool) error {
 		}
 		return a.detachSwitch(caller, host, noUndo, force)
 	}
+	// Kept for piste fix (switchlog.go): its rebuild can't show a failed
+	// activation.
+	a.startRecord(a.home())
+	err := a.switchHere(host, noUndo, force)
+	a.endRecord(err)
+	return err
+}
+
+// switchHere is runSwitch in this process, its messages and the switch's
+// output recorded in the switch's log.
+func (a *App) switchHere(host string, noUndo, force bool) error {
 	p, err := a.plat()
 	if err != nil {
 		return err
@@ -336,6 +352,7 @@ func (a *App) runSwitch(host string, noUndo, force bool) error {
 		return err
 	}
 	lastSwitchedKind = t.Kind
+	a.recordTarget(t.Name, p.FlakeDir)
 	// A local piste checkout overrides the input (cross-repo
 	// development; on darwin it also spares root's ssh). The guard's names
 	// are read against it too, as the build reads the overlay.

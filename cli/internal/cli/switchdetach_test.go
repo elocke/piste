@@ -47,7 +47,7 @@ func TestDetachArgv(t *testing.T) {
 	log := "/home/user/.local/state/piste/switch.log"
 	got := detachArgv("piste-switch-1761900000", log, "/nix/store/x/bin/piste", environ, true, "o", "hh", true, false)
 	want := strings.Fields("systemd-run --user --wait --collect --quiet --same-dir --unit piste-switch-1761900000 " +
-		"-p StandardOutput=truncate:" + log + " -E PATH -E HOME -E SECRET -- /nix/store/x/bin/piste -v --overlay o switch --host hh --no-undo")
+		"-p StandardOutput=append:" + log + " -E PATH -E HOME -E SECRET -- /nix/store/x/bin/piste -v --overlay o switch --host hh --no-undo")
 	if !slices.Equal(got, want) {
 		t.Errorf("got  %q\nwant %q", got, want)
 	}

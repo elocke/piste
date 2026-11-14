@@ -19,6 +19,7 @@ branch is up to date with `main` when it merges: a cut that brings other
 changes in with it isn't released.
 
 ## Unreleased
+- Every `piste switch` keeps its output in `~/.local/state/piste/switch.log` (before, only a switch inside a Linux user service did), and `piste fix`, when its rebuild passes, shows that failed switch's error lines and hands them to the AI, which no longer has to ask what you saw. The switch's output now reaches the terminal through a pipe, so nix prints plain lines instead of its progress bar.
 
 ## v0.1.0 (2026-11-13)
 The first public release. piste sets up a Mac, a Linux machine or a NixOS machine from one small repo of your own, and its `piste` command keeps every machine matching it. Start with the [README](https://github.com/elocke/piste#readme); the docs are also a site, https://elocke.github.io/piste/, which redeploys with each release. piste is provided as is, with no support.

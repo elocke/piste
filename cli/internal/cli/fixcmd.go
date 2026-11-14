@@ -119,7 +119,10 @@ func newFix(a *App) *cobra.Command {
 		Long: "Rebuild what `piste switch` builds (the checkout's engine, --show-trace), without\n" +
 			"activating, and keep the output in ${XDG_STATE_HOME:-~/.local/state}/piste/fix.log.\n" +
 			"At a terminal, then start Claude Code (else Codex) at the piste checkout with the\n" +
-			"error and the piste-fix skill. PISTE_AI=claude|codex picks one; PISTE_AI=none, no AI.",
+			"error and the piste-fix skill. PISTE_AI=claude|codex picks one; PISTE_AI=none, no AI.\n\n" +
+			"When it builds, the failure was in activation: if the last piste switch was of the\n" +
+			"same host and failed, its error lines from ${XDG_STATE_HOME:-~/.local/state}/piste/switch.log\n" +
+			"are shown, and handed to the AI.",
 		Args: cobra.NoArgs,
 		RunE: func(*cobra.Command, []string) error {
 			return a.runFix(host)
@@ -209,9 +212,25 @@ func (a *App) runFix(host string) error {
 	}
 
 	built, summary := rc == 0, ""
+	// When it builds, the last switch's log has what the rebuild can't show.
+	var sw *switchFailure
 	if built {
+		swPath := switchLog(a.Env.Getenv, p.HomeDir)
+		if last, ok := failedSwitch(swPath, name, p.FlakeDir); ok {
+			sw = &switchFailure{Path: swPath, When: last.When, Lines: last.excerpt()}
+		}
+	}
+	switch {
+	case sw != nil:
+		a.success(fmt.Sprintf("✓ %s builds, so the failure was in activation.", name))
+		a.errorf(fmt.Sprintf("The last piste switch of %s (%s) failed:", name, sw.When))
+		for _, l := range sw.Lines {
+			a.errorf("  " + l)
+		}
+		a.info("Switch log: " + sw.Path)
+	case built:
 		a.success(fmt.Sprintf("✓ %s builds, so the failure was in activation, or it's gone.", name))
-	} else {
+	default:
 		if summary = stderrTail(out, 3); summary == "" {
 			summary = fmt.Sprintf("Build failed (exit code %d)", rc)
 		}
@@ -233,7 +252,7 @@ func (a *App) runFix(host string) error {
 	// Typing piste fix at a terminal is the request: after a passing build
 	// too, the session starts and asks what the person saw.
 	if ai.Name != "" && rootErr == nil && interactive(a.Stdout) {
-		prompt := fixPrompt(built, name, summary, logPath, argv, a.fixRecheck(p, root, host))
+		prompt := fixPrompt(built, name, summary, logPath, argv, a.fixRecheck(p, root, host), sw)
 		return a.startFix(ai, root, prompt, filepath.Dir(logPath), built)
 	}
 	if !built {
@@ -262,14 +281,30 @@ func (a *App) startFix(ai fixAI, root, prompt, logDir string, built bool) error 
 	return nil
 }
 
-// fixPrompt is the session's first message: the error in one line, where
-// the full output is, the build piste ran, the skill to follow, and the
-// command that checks a fix (recheck: the same config, from the checkout
-// root). No log text, so it stays far below the limit on one argument.
-func fixPrompt(built bool, name, summary, logPath string, argv []string, recheck string) string {
+// switchFailure is the failed switch piste fix found in the switch's log:
+// the log, when the switch ran, and its error lines (lastSwitch.excerpt).
+type switchFailure struct {
+	Path, When string
+	Lines      []string
+}
+
+// fixPrompt is the session's first message: the error in one line (or, when
+// it builds and the last switch failed, sw's few error lines), where the
+// full output is, the build piste ran, the skill to follow, and the command
+// that checks a fix (recheck: the same config, from the checkout root). No
+// more log text than that, so it stays far below the limit on one argument.
+func fixPrompt(built bool, name, summary, logPath string, argv []string, recheck string, sw *switchFailure) string {
 	head := fmt.Sprintf("piste fix rebuilt %s as piste switch builds it, without activating", name)
 	ran := fmt.Sprintf("The build ran:\n\n%s\n\n", shellJoin(argv))
 	check := "check it with:\n\n" + recheck + "\n"
+	if built && sw != nil {
+		return head + ", and it builds now: the failure was in activation, or in piste's check after it. " +
+			fmt.Sprintf("The last piste switch of %s (%s) failed; its whole output is in %s. ", name, sw.When, sw.Path) +
+			"Its error lines:\n\n" + strings.Join(sw.Lines, "\n") + "\n\n" +
+			"Read the log around them, then follow .agents/skills/piste-fix/SKILL.md (its rebuild's output is in " + logPath + "). " + ran +
+			"Once you've fixed it, " + check +
+			"It only builds: the person's piste switch checks the activation.\n"
+	}
 	if built {
 		return head + ", and it builds now: the failure was in activation, or it's gone. " +
 			"Its output is in " + logPath + ". " + ran +
