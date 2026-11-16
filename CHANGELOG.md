@@ -20,6 +20,9 @@ changes in with it isn't released.
 
 ## Unreleased
 
+## v0.1.2 (2026-11-16)
+- Inputs updated (flake.lock).
+
 ## v0.1.1 (2026-11-14)
 - New: [docs/for-agents.md](docs/for-agents.md), a page an AI coding agent reads to help a person set up and use piste, a copy-paste prompt for it at the top of the README, and `llms.txt` at the docs site's root.
 - Every `piste switch` keeps its output in `~/.local/state/piste/switch.log` (before, only a switch inside a Linux user service did), and `piste fix`, when its rebuild passes, shows that failed switch's error lines and hands them to the AI, which no longer has to ask what you saw. The switch's output now reaches the terminal through a pipe, so nix prints plain lines instead of its progress bar.
