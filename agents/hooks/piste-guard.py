@@ -17,6 +17,13 @@ A safety guard (dotenv, git add, ...) that replaces the plugin listed under
   rm           allowed when every target is recoverable (clean, fully
                tracked by git), temporary (/tmp, $TMPDIR), or absent;
                otherwise deny and suggest `trash-put`.
+  main checkout  deny the edit tools (Edit, Write, MultiEdit, NotebookEdit)
+               inside a main checkout listed in ~/.config/piste/protected-checkouts
+               ($PISTE_GUARD_PROTECTED overrides the path): one absolute path
+               per line, `#` comments, and an optional `hint: <text>` line
+               added to the reason, with {root} replaced by the checkout. A
+               linked worktree of that repo is not its main checkout, so edits
+               there are fine. No list file, no effect.
 
 Input: the hook JSON on stdin (tool_name, tool_input, cwd). Output: nothing
 (no opinion; the harness permission flow decides) or a PreToolUse "deny".
@@ -526,12 +533,64 @@ def check_command(text, cwd, depth=0, pending=None):
     return reasons
 
 
+PROTECTED_FILE = "~/.config/piste/protected-checkouts"
+EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
+MAIN_REASON = (
+    "{root} is a protected main checkout: other agents share it, so edits go in a "
+    "separate worktree of this repo instead."
+)
+
+
+def load_protected():
+    """(roots, hint) from the protected-checkouts list; ([], "") without one."""
+    path = os.path.expanduser(os.environ.get("PISTE_GUARD_PROTECTED", PROTECTED_FILE))
+    try:
+        with open(path, encoding="utf-8") as f:
+            lines = f.read().splitlines()
+    except OSError:
+        return [], ""
+    roots, hint = [], ""
+    for line in (l.strip() for l in lines):
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("hint:"):
+            hint = line[len("hint:"):].strip()
+            continue
+        root = os.path.realpath(os.path.expanduser(line))
+        if os.path.isdir(root):
+            roots.append(root)
+    return roots, hint
+
+
+def check_main_checkout(path, cwd):
+    """Deny an edit whose target's repo toplevel is a protected main checkout."""
+    if not path:
+        return []
+    roots, hint = load_protected()
+    if not roots:
+        return []
+    target = os.path.realpath(os.path.join(cwd, os.path.expanduser(path)))
+    folder = target if os.path.isdir(target) else os.path.dirname(target)
+    while folder and not os.path.isdir(folder):
+        folder = os.path.dirname(folder)
+    top = git_out(folder, "rev-parse", "--show-toplevel").strip()
+    if not top:
+        return []
+    top = os.path.realpath(top)
+    if top not in roots:
+        return []
+    reason = MAIN_REASON.format(root=top)
+    return [reason + ("\n" + hint.replace("{root}", top) if hint else "")]
+
+
 def check_tool(data):
     tool = data.get("tool_name") or ""
     ti = data.get("tool_input") or {}
     cwd = data.get("cwd") or os.getcwd()
     if tool == "Bash":
         return check_command(ti.get("command") or "", cwd)
+    if tool in EDIT_TOOLS:
+        return check_main_checkout(ti.get("file_path") or ti.get("notebook_path") or "", cwd)
     if tool == "Read" and is_env_file(ti.get("file_path") or ""):
         return [ENV_REASON.format(path=ti["file_path"])]
     if tool == "Grep":

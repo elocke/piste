@@ -40,6 +40,15 @@ script = "piste-guard.py"
 timeout = 10
 targets = ["claude"]
 
+# Edit tools only: Codex edits through apply_patch, which this does not cover yet.
+[[hook]]
+name = "guard-edit"
+event = "preToolUse"
+matcher = "Edit|Write|MultiEdit|NotebookEdit"
+script = "piste-guard.py"
+timeout = 10
+targets = ["claude"]
+
 # Hooks that do the same job: `piste agents check` reports one still active as
 # a conflict, since it would rewrite or block twice.
 [replaces]

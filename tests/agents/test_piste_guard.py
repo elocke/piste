@@ -296,5 +296,85 @@ class Robustness(Repo):
         self.assertAllowed("echo 'unterminated")
 
 
+class MainCheckout(Repo):
+    """guard-edit: no edit tools inside a main checkout on the protected list."""
+
+    def setUp(self):
+        super().setUp()
+        self.root = os.path.realpath(self.repo)
+        self.listfile = Path(self._tmp.name) / "protected-checkouts"
+        self.write_list(self.repo)
+        self._prot = os.environ.get("PISTE_GUARD_PROTECTED")
+        os.environ["PISTE_GUARD_PROTECTED"] = str(self.listfile)
+
+    def tearDown(self):
+        if self._prot is None:
+            os.environ.pop("PISTE_GUARD_PROTECTED", None)
+        else:
+            os.environ["PISTE_GUARD_PROTECTED"] = self._prot
+        super().tearDown()
+
+    def write_list(self, *roots):
+        lines = ["# protected main checkouts", "hint: use a worktree of {root}"]
+        self.listfile.write_text("\n".join(lines + [str(r) for r in roots]) + "\n")
+
+    def edit(self, path, tool="Edit", key="file_path", cwd=None):
+        return self.run_hook({"tool_name": tool, "tool_input": {key: str(path)},
+                              "cwd": str(cwd or self.repo)})
+
+    def assertEditDenied(self, res, root=None):
+        self.assertIsNotNone(res, "expected deny")
+        out = res["hookSpecificOutput"]
+        self.assertEqual(out["permissionDecision"], "deny")
+        self.assertIn(root or self.root, out["permissionDecisionReason"])
+
+    def worktree(self):
+        wt = Path(self._tmp.name) / "wt"
+        sh(self.repo, "git", "worktree", "add", "-q", str(wt), "-b", "feat")
+        return wt
+
+    def test_edit_in_protected_main_denied(self):
+        res = self.edit(self.repo / "tracked.txt")
+        self.assertEditDenied(res)
+        self.assertIn("use a worktree of " + self.root, res["hookSpecificOutput"]["permissionDecisionReason"])
+
+    def test_relative_path_resolved_against_cwd(self):
+        self.assertEditDenied(self.edit("tracked.txt", cwd=self.repo))
+
+    def test_write_new_file_in_new_dir_denied(self):
+        self.assertEditDenied(self.edit(self.repo / "new" / "dir" / "x.txt", tool="Write"))
+
+    def test_notebook_path_used(self):
+        self.assertEditDenied(self.edit(self.repo / "nb.ipynb", tool="NotebookEdit", key="notebook_path"))
+
+    def test_linked_worktree_allowed(self):
+        wt = self.worktree()
+        self.assertIsNone(self.edit(wt / "tracked.txt", cwd=wt))
+
+    def test_symlink_into_main_denied(self):
+        wt = self.worktree()
+        (wt / "link.txt").symlink_to(self.repo / "tracked.txt")
+        self.assertEditDenied(self.edit(wt / "link.txt", cwd=wt))
+
+    def test_nested_repo_judged_by_own_entry(self):
+        nested = self.repo / "nested"
+        nested.mkdir()
+        sh(nested, "git", "init", "-q", "-b", "main")
+        self.assertIsNone(self.edit(nested / "f.txt"))
+        self.write_list(nested)
+        self.assertEditDenied(self.edit(nested / "f.txt"), root=os.path.realpath(nested))
+
+    def test_missing_list_and_unlisted_repo_allowed(self):
+        other = Path(self._tmp.name) / "other"
+        other.mkdir()
+        sh(other, "git", "init", "-q", "-b", "main")
+        self.assertIsNone(self.edit(other / "f.txt", cwd=other))
+        os.environ["PISTE_GUARD_PROTECTED"] = str(Path(self._tmp.name) / "absent")
+        self.assertIsNone(self.edit(self.repo / "tracked.txt"))
+
+    def test_bash_unaffected(self):
+        self.assertAllowed("echo hi > tracked.txt")
+
+
 if __name__ == "__main__":
     unittest.main()

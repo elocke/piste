@@ -2449,12 +2449,12 @@
         "agents-shared-presets: base still tells the agent about rtk";
       assert lib.assertMsg (lib.all (h: has "set up by piste" (blockOf [ "base" ] h)) [ "claude" "codex" ])
         "agents-shared-presets: base lacks the 'set up by piste' fragment";
-      assert lib.assertMsg (hookNames [ "guard" ] == [ "guard-bash" "guard-read" ])
-        "agents-shared-presets: guard is not guard-bash and guard-read";
+      assert lib.assertMsg (hookNames [ "guard" ] == [ "guard-bash" "guard-edit" "guard-read" ])
+        "agents-shared-presets: guard is not guard-bash, guard-edit and guard-read";
       assert lib.assertMsg (hookNames [ "rtk" ] == [ "rtk-rewrite" ] && has "RTK" (blockOf [ "rtk" ] "claude") && has "rtk" (blockOf [ "rtk" ] "codex"))
         "agents-shared-presets: rtk is not the rtk-rewrite hook and its instruction";
-      assert lib.assertMsg (hookNames [ "guard" "rtk" ] == [ "guard-bash" "guard-read" "rtk-rewrite" ])
-        "agents-shared-presets: guard and rtk together are not all three hooks";
+      assert lib.assertMsg (hookNames [ "guard" "rtk" ] == [ "guard-bash" "guard-edit" "guard-read" "rtk-rewrite" ])
+        "agents-shared-presets: guard and rtk together are not all four hooks";
       assert lib.assertMsg (throws (host [ "hooks" ]).hooks)
         "agents-shared-presets: the old hooks preset still resolves";
       assert lib.assertMsg (lib.all (d: !(d ? tool) && !(d ? claude && d.claude ? plugin)) decls)
