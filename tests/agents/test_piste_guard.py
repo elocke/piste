@@ -354,7 +354,12 @@ class MainCheckout(Repo):
     def test_symlink_into_main_denied(self):
         wt = self.worktree()
         (wt / "link.txt").symlink_to(self.repo / "tracked.txt")
-        self.assertEditDenied(self.edit(wt / "link.txt", cwd=wt))
+        res = self.edit(wt / "link.txt", cwd=wt)
+        self.assertEditDenied(res)
+        reason = res["hookSpecificOutput"]["permissionDecisionReason"]
+        # Another worktree would hold the same link: say it's shared, not "make a worktree".
+        self.assertIn("is a link into " + self.root, reason)
+        self.assertNotIn("use a worktree of", reason)
 
     def test_nested_repo_judged_by_own_entry(self):
         nested = self.repo / "nested"

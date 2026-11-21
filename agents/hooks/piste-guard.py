@@ -539,6 +539,10 @@ MAIN_REASON = (
     "{root} is a protected main checkout: other agents share it, so edits go in a "
     "separate worktree of this repo instead."
 )
+LINK_REASON = (
+    "{path} is a link into {root}, a protected main checkout: every copy of this repo "
+    "shares that file. Don't edit or replace the link; ask the user to change it in {root}."
+)
 
 
 def load_protected():
@@ -562,6 +566,15 @@ def load_protected():
     return roots, hint
 
 
+def toplevel(path):
+    """realpath of the repo toplevel holding path's nearest existing folder, or ""."""
+    folder = path if os.path.isdir(path) else os.path.dirname(path)
+    while folder and not os.path.isdir(folder):
+        folder = os.path.dirname(folder)
+    top = git_out(folder, "rev-parse", "--show-toplevel").strip()
+    return os.path.realpath(top) if top else ""
+
+
 def check_main_checkout(path, cwd):
     """Deny an edit whose target's repo toplevel is a protected main checkout."""
     if not path:
@@ -569,16 +582,14 @@ def check_main_checkout(path, cwd):
     roots, hint = load_protected()
     if not roots:
         return []
-    target = os.path.realpath(os.path.join(cwd, os.path.expanduser(path)))
-    folder = target if os.path.isdir(target) else os.path.dirname(target)
-    while folder and not os.path.isdir(folder):
-        folder = os.path.dirname(folder)
-    top = git_out(folder, "rev-parse", "--show-toplevel").strip()
-    if not top:
-        return []
-    top = os.path.realpath(top)
+    given = os.path.abspath(os.path.join(cwd, os.path.expanduser(path)))
+    top = toplevel(os.path.realpath(given))
     if top not in roots:
         return []
+    # A link from elsewhere (another worktree) into the root: a new worktree
+    # would hold the same link, so don't send the agent off to make one.
+    if toplevel(os.path.dirname(given)) != top:
+        return [LINK_REASON.format(path=given, root=top)]
     reason = MAIN_REASON.format(root=top)
     return [reason + ("\n" + hint.replace("{root}", top) if hint else "")]
 
