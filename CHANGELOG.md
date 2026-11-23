@@ -19,7 +19,10 @@ branch is up to date with `main` when it merges: a cut that brings other
 changes in with it isn't released.
 
 ## Unreleased
+
+## v0.1.2 (2026-11-23)
 - piste-guard: a `guard-edit` hook (in the `guard` preset) denies Claude's edit tools inside main checkouts listed in `~/.config/piste/protected-checkouts`; no list, no effect.
+- Inputs updated (flake.lock).
 
 ## v0.1.1 (2026-11-14)
 - New: [docs/for-agents.md](docs/for-agents.md), a page an AI coding agent reads to help a person set up and use piste, a copy-paste prompt for it at the top of the README, and `llms.txt` at the docs site's root.
